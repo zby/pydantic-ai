@@ -13,13 +13,13 @@ from typing_extensions import assert_never
 from ...messages import (
     AudioUrl,
     BinaryContent,
-    BuiltinToolCallPart,
-    BuiltinToolReturnPart,
     DocumentUrl,
     FilePart,
     ImageUrl,
     ModelMessage,
     RetryPromptPart,
+    ServerSideToolCallPart,
+    ServerSideToolReturnPart,
     SystemPromptPart,
     TextPart,
     ThinkingPart,
@@ -135,16 +135,16 @@ class VercelAIAdapter(UIAdapter[RequestData, UIMessage, BaseChunk, AgentDepsT, O
                     elif isinstance(part, ToolUIPart | DynamicToolUIPart):
                         if isinstance(part, DynamicToolUIPart):
                             tool_name = part.tool_name
-                            builtin_tool = False
+                            server_side_tool = False
                         else:
                             tool_name = part.type.removeprefix('tool-')
-                            builtin_tool = part.provider_executed
+                            server_side_tool = part.provider_executed
 
                         tool_call_id = part.tool_call_id
                         args = part.input
 
-                        if builtin_tool:
-                            call_part = BuiltinToolCallPart(tool_name=tool_name, tool_call_id=tool_call_id, args=args)
+                        if server_side_tool:
+                            call_part = ServerSideToolCallPart(tool_name=tool_name, tool_call_id=tool_call_id, args=args)
                             builder.add(call_part)
 
                             if isinstance(part, ToolOutputAvailablePart | ToolOutputErrorPart):
@@ -159,7 +159,7 @@ class VercelAIAdapter(UIAdapter[RequestData, UIMessage, BaseChunk, AgentDepsT, O
                                 call_part.provider_name = provider_name
 
                                 builder.add(
-                                    BuiltinToolReturnPart(
+                                    ServerSideToolReturnPart(
                                         tool_name=tool_name,
                                         tool_call_id=tool_call_id,
                                         content=output,

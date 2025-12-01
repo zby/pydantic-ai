@@ -24,7 +24,7 @@ from .._json_schema import JsonSchemaTransformer
 from .._output import OutputObjectDefinition, PromptedOutputSchema
 from .._parts_manager import ModelResponsePartsManager
 from .._run_context import RunContext
-from ..builtin_tools import AbstractBuiltinTool
+from ..server_side_tools import AbstractServerSideTool
 from ..exceptions import UserError
 from ..messages import (
     BaseToolCallPart,
@@ -327,7 +327,7 @@ class ModelRequestParameters:
     """Configuration for an agent's request to a model, specifically related to tools and output handling."""
 
     function_tools: list[ToolDefinition] = field(default_factory=list)
-    builtin_tools: list[AbstractBuiltinTool] = field(default_factory=list)
+    server_side_tools: list[AbstractServerSideTool] = field(default_factory=list)
 
     output_mode: OutputMode = 'text'
     output_object: OutputObjectDefinition | None = None
@@ -451,11 +451,11 @@ class Model(ABC):
 
         params = self.customize_request_parameters(model_request_parameters)
 
-        if builtin_tools := params.builtin_tools:
-            # Deduplicate builtin tools
+        if server_side_tools := params.server_side_tools:
+            # Deduplicate server-side tools
             params = replace(
                 params,
-                builtin_tools=list({tool.unique_id: tool for tool in builtin_tools}.values()),
+                server_side_tools=list({tool.unique_id: tool for tool in server_side_tools}.values()),
             )
 
         if params.output_mode == 'auto':

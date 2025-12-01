@@ -57,7 +57,7 @@ from pydantic_ai._output import (
     TextOutput,
 )
 from pydantic_ai.agent import AgentRunResult, WrapperAgent
-from pydantic_ai.builtin_tools import CodeExecutionTool, MCPServerTool, WebSearchTool
+from pydantic_ai.server_side_tools import CodeExecutionTool, MCPServerTool, WebSearchTool
 from pydantic_ai.models.function import AgentInfo, DeltaToolCall, DeltaToolCalls, FunctionModel
 from pydantic_ai.models.test import TestModel
 from pydantic_ai.output import OutputObjectDefinition, StructuredDict, ToolOutput
@@ -6210,7 +6210,7 @@ def test_agent_builtin_tools_runtime_vs_agent_level():
 
     agent = Agent(
         model=model,
-        builtin_tools=[
+        server_side_tools=[
             WebSearchTool(),
             CodeExecutionTool(),
             MCPServerTool(id='deepwiki', url='https://mcp.deepwiki.com/mcp'),
@@ -6219,10 +6219,10 @@ def test_agent_builtin_tools_runtime_vs_agent_level():
     )
 
     # Runtime tool with same unique ID should override agent-level tool
-    with pytest.raises(Exception, match='TestModel does not support built-in tools'):
+    with pytest.raises(Exception, match='TestModel does not support server-side tools'):
         agent.run_sync(
             'Hello',
-            builtin_tools=[
+            server_side_tools=[
                 WebSearchTool(search_context_size='high'),
                 MCPServerTool(id='example', url='https://mcp.example.com/mcp'),
                 MCPServerTool(id='github', url='https://mcp.githubcopilot.com/mcp', authorization_token='token'),
@@ -6230,7 +6230,7 @@ def test_agent_builtin_tools_runtime_vs_agent_level():
         )
 
     assert model.last_model_request_parameters is not None
-    assert model.last_model_request_parameters.builtin_tools == snapshot(
+    assert model.last_model_request_parameters.server_side_tools == snapshot(
         [
             WebSearchTool(search_context_size='high'),
             CodeExecutionTool(),

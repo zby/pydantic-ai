@@ -1,7 +1,7 @@
 from inline_snapshot import snapshot
 from pydantic import TypeAdapter
 
-from pydantic_ai.builtin_tools import (
+from pydantic_ai.server_side_tools import (
     CodeExecutionTool,
     ImageGenerationTool,
     MCPServerTool,
@@ -18,7 +18,7 @@ ta = TypeAdapter(ModelRequestParameters)
 def test_model_request_parameters_are_serializable():
     params = ModelRequestParameters(
         function_tools=[],
-        builtin_tools=[],
+        server_side_tools=[],
         output_mode='text',
         allow_text_output=True,
         output_tools=[],
@@ -28,7 +28,7 @@ def test_model_request_parameters_are_serializable():
     assert dumped == snapshot(
         {
             'function_tools': [],
-            'builtin_tools': [],
+            'server_side_tools': [],
             'output_mode': 'text',
             'output_object': None,
             'output_tools': [],
@@ -41,7 +41,7 @@ def test_model_request_parameters_are_serializable():
 
     params = ModelRequestParameters(
         function_tools=[ToolDefinition(name='test')],
-        builtin_tools=[
+        server_side_tools=[
             WebSearchTool(user_location=WebSearchUserLocation(city='New York', country='US')),
             CodeExecutionTool(),
             WebFetchTool(),
@@ -70,7 +70,7 @@ def test_model_request_parameters_are_serializable():
                     'metadata': None,
                 }
             ],
-            'builtin_tools': [
+            'server_side_tools': [
                 {
                     'kind': 'web_search',
                     'search_context_size': 'medium',

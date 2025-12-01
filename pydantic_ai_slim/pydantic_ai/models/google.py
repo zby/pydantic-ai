@@ -13,12 +13,10 @@ from typing_extensions import assert_never
 from .. import UnexpectedModelBehavior, _utils, usage
 from .._output import OutputObjectDefinition
 from .._run_context import RunContext
-from ..builtin_tools import CodeExecutionTool, ImageGenerationTool, WebFetchTool, WebSearchTool
+from ..server_side_tools import CodeExecutionTool, ImageGenerationTool, WebFetchTool, WebSearchTool
 from ..exceptions import ModelAPIError, ModelHTTPError, UserError
 from ..messages import (
     BinaryContent,
-    BuiltinToolCallPart,
-    BuiltinToolReturnPart,
     CachePoint,
     FilePart,
     FileUrl,
@@ -29,6 +27,8 @@ from ..messages import (
     ModelResponsePart,
     ModelResponseStreamEvent,
     RetryPromptPart,
+    ServerSideToolCallPart,
+    ServerSideToolReturnPart,
     SystemPromptPart,
     TextPart,
     ThinkingPart,
@@ -232,17 +232,17 @@ class GoogleModel(Model):
     def prepare_request(
         self, model_settings: ModelSettings | None, model_request_parameters: ModelRequestParameters
     ) -> tuple[ModelSettings | None, ModelRequestParameters]:
-        supports_native_output_with_builtin_tools = GoogleModelProfile.from_profile(
+        supports_native_output_with_server_side_tools = GoogleModelProfile.from_profile(
             self.profile
-        ).google_supports_native_output_with_builtin_tools
-        if model_request_parameters.builtin_tools and model_request_parameters.output_tools:
+        ).google_supports_native_output_with_server_side_tools
+        if model_request_parameters.server_side_tools and model_request_parameters.output_tools:
             if model_request_parameters.output_mode == 'auto':
-                output_mode = 'native' if supports_native_output_with_builtin_tools else 'prompted'
+                output_mode = 'native' if supports_native_output_with_server_side_tools else 'prompted'
                 model_request_parameters = replace(model_request_parameters, output_mode=output_mode)
             else:
-                output_mode = 'NativeOutput' if supports_native_output_with_builtin_tools else 'PromptedOutput'
+                output_mode = 'NativeOutput' if supports_native_output_with_server_side_tools else 'PromptedOutput'
                 raise UserError(
-                    f'Google does not support output tools and built-in tools at the same time. Use `output_type={output_mode}(...)` instead.'
+                    f'Google does not support output tools and server-side tools at the same time. Use `output_type={output_mode}(...)` instead.'
                 )
         return super().prepare_request(model_settings, model_request_parameters)
 
@@ -341,11 +341,11 @@ class GoogleModel(Model):
             for t in model_request_parameters.tool_defs.values()
         ]
 
-        if model_request_parameters.builtin_tools:
+        if model_request_parameters.server_side_tools:
             if model_request_parameters.function_tools:
-                raise UserError('Google does not support function tools and built-in tools at the same time.')
+                raise UserError('Google does not support function tools and server-side tools at the same time.')
 
-            for tool in model_request_parameters.builtin_tools:
+            for tool in model_request_parameters.server_side_tools:
                 if isinstance(tool, WebSearchTool):
                     tools.append(ToolDict(google_search=GoogleSearchDict()))
                 elif isinstance(tool, WebFetchTool):
@@ -824,14 +824,14 @@ def _content_model_response(m: ModelResponse, provider_name: str) -> ContentDict
             if item.content:
                 part['text'] = item.content
                 part['thought'] = True
-        elif isinstance(item, BuiltinToolCallPart):
+        elif isinstance(item, ServerSideToolCallPart):
             if item.provider_name == provider_name:
                 if item.tool_name == CodeExecutionTool.kind:
                     part['executable_code'] = cast(ExecutableCodeDict, item.args_as_dict())
                 elif item.tool_name == WebSearchTool.kind:
                     # Web search calls are not sent back
                     pass
-        elif isinstance(item, BuiltinToolReturnPart):
+        elif isinstance(item, ServerSideToolReturnPart):
             if item.provider_name == provider_name:
                 if item.tool_name == CodeExecutionTool.kind and isinstance(item.content, dict):
                     part['code_execution_result'] = cast(CodeExecutionResultDict, item.content)  # pyright: ignore[reportUnknownMemberType]
@@ -984,8 +984,8 @@ def _metadata_as_usage(response: GenerateContentResponse, provider: str, provide
     )
 
 
-def _map_executable_code(executable_code: ExecutableCode, provider_name: str, tool_call_id: str) -> BuiltinToolCallPart:
-    return BuiltinToolCallPart(
+def _map_executable_code(executable_code: ExecutableCode, provider_name: str, tool_call_id: str) -> ServerSideToolCallPart:
+    return ServerSideToolCallPart(
         provider_name=provider_name,
         tool_name=CodeExecutionTool.kind,
         args=executable_code.model_dump(mode='json'),
@@ -995,8 +995,8 @@ def _map_executable_code(executable_code: ExecutableCode, provider_name: str, to
 
 def _map_code_execution_result(
     code_execution_result: CodeExecutionResult, provider_name: str, tool_call_id: str
-) -> BuiltinToolReturnPart:
-    return BuiltinToolReturnPart(
+) -> ServerSideToolReturnPart:
+    return ServerSideToolReturnPart(
         provider_name=provider_name,
         tool_name=CodeExecutionTool.kind,
         content=code_execution_result.model_dump(mode='json'),
@@ -1006,17 +1006,17 @@ def _map_code_execution_result(
 
 def _map_grounding_metadata(
     grounding_metadata: GroundingMetadata | None, provider_name: str
-) -> tuple[BuiltinToolCallPart, BuiltinToolReturnPart] | tuple[None, None]:
+) -> tuple[ServerSideToolCallPart, ServerSideToolReturnPart] | tuple[None, None]:
     if grounding_metadata and (web_search_queries := grounding_metadata.web_search_queries):
         tool_call_id = _utils.generate_tool_call_id()
         return (
-            BuiltinToolCallPart(
+            ServerSideToolCallPart(
                 provider_name=provider_name,
                 tool_name=WebSearchTool.kind,
                 tool_call_id=tool_call_id,
                 args={'queries': web_search_queries},
             ),
-            BuiltinToolReturnPart(
+            ServerSideToolReturnPart(
                 provider_name=provider_name,
                 tool_name=WebSearchTool.kind,
                 tool_call_id=tool_call_id,
@@ -1031,19 +1031,19 @@ def _map_grounding_metadata(
 
 def _map_url_context_metadata(
     url_context_metadata: UrlContextMetadata | None, provider_name: str
-) -> tuple[BuiltinToolCallPart, BuiltinToolReturnPart] | tuple[None, None]:
+) -> tuple[ServerSideToolCallPart, ServerSideToolReturnPart] | tuple[None, None]:
     if url_context_metadata and (url_metadata := url_context_metadata.url_metadata):
         tool_call_id = _utils.generate_tool_call_id()
         # Extract URLs from the metadata
         urls = [meta.retrieved_url for meta in url_metadata if meta.retrieved_url]
         return (
-            BuiltinToolCallPart(
+            ServerSideToolCallPart(
                 provider_name=provider_name,
                 tool_name=WebFetchTool.kind,
                 tool_call_id=tool_call_id,
                 args={'urls': urls} if urls else None,
             ),
-            BuiltinToolReturnPart(
+            ServerSideToolReturnPart(
                 provider_name=provider_name,
                 tool_name=WebFetchTool.kind,
                 tool_call_id=tool_call_id,

@@ -8,13 +8,13 @@ import pytest
 from inline_snapshot import snapshot
 
 from pydantic_ai import Agent
-from pydantic_ai.builtin_tools import WebSearchTool
+from pydantic_ai.server_side_tools import WebSearchTool
 from pydantic_ai.messages import (
     AudioUrl,
     BinaryContent,
     BinaryImage,
-    BuiltinToolCallPart,
-    BuiltinToolReturnPart,
+    ServerSideToolCallPart,
+    ServerSideToolReturnPart,
     DocumentUrl,
     FilePart,
     ImageUrl,
@@ -73,19 +73,13 @@ with try_import() as openai_import_successful:
 pytestmark = [
     pytest.mark.anyio,
     pytest.mark.vcr,
-    pytest.mark.filterwarnings(
-        'ignore:`BuiltinToolCallEvent` is deprecated, look for `PartStartEvent` and `PartDeltaEvent` with `BuiltinToolCallPart` instead.:DeprecationWarning'
-    ),
-    pytest.mark.filterwarnings(
-        'ignore:`BuiltinToolResultEvent` is deprecated, look for `PartStartEvent` and `PartDeltaEvent` with `BuiltinToolReturnPart` instead.:DeprecationWarning'
-    ),
 ]
 
 
 @pytest.mark.skipif(not openai_import_successful(), reason='OpenAI not installed')
 async def test_run(allow_model_requests: None, openai_api_key: str):
     model = OpenAIResponsesModel('gpt-5', provider=OpenAIProvider(api_key=openai_api_key))
-    agent = Agent(model=model, builtin_tools=[WebSearchTool()])
+    agent = Agent(model=model, server_side_tools=[WebSearchTool()])
 
     data = SubmitMessage(
         trigger='submit-message',
@@ -1151,7 +1145,7 @@ async def test_run_stream_builtin_tool_call():
         messages: list[ModelMessage], agent_info: AgentInfo
     ) -> AsyncIterator[BuiltinToolCallsReturns | DeltaToolCalls | str]:
         yield {
-            0: BuiltinToolCallPart(
+            0: ServerSideToolCallPart(
                 tool_name=WebSearchTool.kind,
                 args='{"query":',
                 tool_call_id='search_1',
@@ -1165,7 +1159,7 @@ async def test_run_stream_builtin_tool_call():
             )
         }
         yield {
-            1: BuiltinToolReturnPart(
+            1: ServerSideToolReturnPart(
                 tool_name=WebSearchTool.kind,
                 content=[
                     {
@@ -1913,26 +1907,26 @@ async def test_adapter_load_messages():
             ),
             ModelResponse(
                 parts=[
-                    BuiltinToolCallPart(
+                    ServerSideToolCallPart(
                         tool_name='web_search',
                         args={'query': 'What is Logfire?'},
                         tool_call_id='toolu_01W2yGpGQcMx7pXV2zZ4s',
                         provider_name='openai',
                     ),
-                    BuiltinToolReturnPart(
+                    ServerSideToolReturnPart(
                         tool_name='web_search',
                         content="[Scrubbed due to 'Auth']",
                         tool_call_id='toolu_01W2yGpGQcMx7pXV2zZ4s',
                         timestamp=IsDatetime(),
                         provider_name='openai',
                     ),
-                    BuiltinToolCallPart(
+                    ServerSideToolCallPart(
                         tool_name='web_search',
                         args={'query': 'What is Logfire?'},
                         tool_call_id='toolu_01W2yGpGQcMx7pXV2z',
                         provider_name='openai',
                     ),
-                    BuiltinToolReturnPart(
+                    ServerSideToolReturnPart(
                         tool_name='web_search',
                         content={'error_text': "Can't do that", 'is_error': True},
                         tool_call_id='toolu_01W2yGpGQcMx7pXV2z',
@@ -1946,7 +1940,7 @@ async def test_adapter_load_messages():
                     ToolCallPart(
                         tool_name='get_table_of_contents', args={'repo': 'pydantic'}, tool_call_id='toolu_01XX3rjFfG77h'
                     ),
-                    BuiltinToolCallPart(
+                    ServerSideToolCallPart(
                         tool_name='web_search',
                         args={'query': 'What is Logfire?'},
                         tool_call_id='toolu_01W2yGpGQcMx7pXV2zZ4s',

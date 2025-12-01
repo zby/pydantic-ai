@@ -9,7 +9,7 @@ from .agent import (
     UserPromptNode,
     capture_run_messages,
 )
-from .builtin_tools import (
+from .server_side_tools import (
     CodeExecutionTool,
     ImageGenerationTool,
     MCPServerTool,
@@ -42,8 +42,8 @@ from .messages import (
     BaseToolReturnPart,
     BinaryContent,
     BinaryImage,
-    BuiltinToolCallPart,
-    BuiltinToolReturnPart,
+    BuiltinToolCallPart,  # pyright: ignore[reportDeprecated]
+    BuiltinToolReturnPart,  # pyright: ignore[reportDeprecated]
     CachePoint,
     DocumentFormat,
     DocumentMediaType,
@@ -71,6 +71,8 @@ from .messages import (
     PartEndEvent,
     PartStartEvent,
     RetryPromptPart,
+    ServerSideToolCallPart,
+    ServerSideToolReturnPart,
     SystemPromptPart,
     TextPart,
     TextPartDelta,
@@ -145,6 +147,8 @@ __all__ = (
     'BinaryContent',
     'BuiltinToolCallPart',
     'BuiltinToolReturnPart',
+    'ServerSideToolCallPart',
+    'ServerSideToolReturnPart',
     'CachePoint',
     'DocumentFormat',
     'DocumentMediaType',
@@ -214,7 +218,7 @@ __all__ = (
     'ToolsetFunc',
     'ToolsetTool',
     'WrapperToolset',
-    # builtin_tools
+    # server_side_tools
     'WebSearchTool',
     'WebSearchUserLocation',
     'WebFetchTool',

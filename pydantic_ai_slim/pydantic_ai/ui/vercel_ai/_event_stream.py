@@ -10,11 +10,11 @@ from pydantic_core import to_json
 
 from ...messages import (
     BaseToolReturnPart,
-    BuiltinToolCallPart,
-    BuiltinToolReturnPart,
     FilePart,
     FunctionToolResultEvent,
     RetryPromptPart,
+    ServerSideToolCallPart,
+    ServerSideToolReturnPart,
     TextPart,
     TextPartDelta,
     ThinkingPart,
@@ -126,15 +126,15 @@ class VercelAIEventStream(UIEventStream[RequestData, BaseChunk, AgentDepsT, Outp
     ) -> AsyncIterator[BaseChunk]:
         yield ReasoningEndChunk(id=self.message_id)
 
-    def handle_tool_call_start(self, part: ToolCallPart | BuiltinToolCallPart) -> AsyncIterator[BaseChunk]:
+    def handle_tool_call_start(self, part: ToolCallPart | ServerSideToolCallPart) -> AsyncIterator[BaseChunk]:
         return self._handle_tool_call_start(part)
 
-    def handle_builtin_tool_call_start(self, part: BuiltinToolCallPart) -> AsyncIterator[BaseChunk]:
+    def handle_server_side_tool_call_start(self, part: ServerSideToolCallPart) -> AsyncIterator[BaseChunk]:
         return self._handle_tool_call_start(part, provider_executed=True)
 
     async def _handle_tool_call_start(
         self,
-        part: ToolCallPart | BuiltinToolCallPart,
+        part: ToolCallPart | ServerSideToolCallPart,
         tool_call_id: str | None = None,
         provider_executed: bool | None = None,
     ) -> AsyncIterator[BaseChunk]:
@@ -160,7 +160,7 @@ class VercelAIEventStream(UIEventStream[RequestData, BaseChunk, AgentDepsT, Outp
             tool_call_id=part.tool_call_id, tool_name=part.tool_name, input=part.args_as_dict()
         )
 
-    async def handle_builtin_tool_call_end(self, part: BuiltinToolCallPart) -> AsyncIterator[BaseChunk]:
+    async def handle_server_side_tool_call_end(self, part: ServerSideToolCallPart) -> AsyncIterator[BaseChunk]:
         yield ToolInputAvailableChunk(
             tool_call_id=part.tool_call_id,
             tool_name=part.tool_name,
@@ -169,7 +169,7 @@ class VercelAIEventStream(UIEventStream[RequestData, BaseChunk, AgentDepsT, Outp
             provider_metadata={'pydantic_ai': {'provider_name': part.provider_name}},
         )
 
-    async def handle_builtin_tool_return(self, part: BuiltinToolReturnPart) -> AsyncIterator[BaseChunk]:
+    async def handle_server_side_tool_return(self, part: ServerSideToolReturnPart) -> AsyncIterator[BaseChunk]:
         yield ToolOutputAvailableChunk(
             tool_call_id=part.tool_call_id,
             output=self._tool_return_output(part),

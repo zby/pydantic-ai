@@ -19,14 +19,12 @@ from .._output import DEFAULT_OUTPUT_TOOL_NAME, OutputObjectDefinition
 from .._run_context import RunContext
 from .._thinking_part import split_content_into_text_and_thinking
 from .._utils import guard_tool_call_id as _guard_tool_call_id, now_utc as _now_utc, number_to_datetime
-from ..builtin_tools import CodeExecutionTool, ImageGenerationTool, MCPServerTool, WebSearchTool
+from ..server_side_tools import CodeExecutionTool, ImageGenerationTool, MCPServerTool, WebSearchTool
 from ..exceptions import UserError
 from ..messages import (
     AudioUrl,
     BinaryContent,
     BinaryImage,
-    BuiltinToolCallPart,
-    BuiltinToolReturnPart,
     CachePoint,
     DocumentUrl,
     FilePart,
@@ -39,6 +37,8 @@ from ..messages import (
     ModelResponseStreamEvent,
     PartStartEvent,
     RetryPromptPart,
+    ServerSideToolCallPart,
+    ServerSideToolReturnPart,
     SystemPromptPart,
     TextPart,
     ThinkingPart,
@@ -210,7 +210,7 @@ class OpenAIResponsesModelSettings(OpenAIChatModelSettings, total=False):
     ALL FIELDS MUST BE `openai_` PREFIXED SO YOU CAN MERGE THEM WITH OTHER MODELS.
     """
 
-    openai_builtin_tools: Sequence[FileSearchToolParam | WebSearchToolParam | ComputerToolParam]
+    openai_server_side_tools: Sequence[FileSearchToolParam | WebSearchToolParam | ComputerToolParam]
     """The provided OpenAI built-in tools to use.
 
     See [OpenAI's built-in tools](https://platform.openai.com/docs/guides/tools?api-mode=responses) for more details.
@@ -692,7 +692,7 @@ class OpenAIChatModel(Model):
         return [self._map_tool_definition(r) for r in model_request_parameters.tool_defs.values()]
 
     def _get_web_search_options(self, model_request_parameters: ModelRequestParameters) -> WebSearchOptions | None:
-        for tool in model_request_parameters.builtin_tools:
+        for tool in model_request_parameters.server_side_tools:
             if isinstance(tool, WebSearchTool):  # pragma: no branch
                 if not OpenAIModelProfile.from_profile(self.profile).openai_chat_supports_web_search:
                     raise UserError(
@@ -736,7 +736,7 @@ class OpenAIChatModel(Model):
                     self._map_response_thinking_part(item)
                 elif isinstance(item, ToolCallPart):
                     self._map_response_tool_call_part(item)
-                elif isinstance(item, BuiltinToolCallPart | BuiltinToolReturnPart):  # pragma: no cover
+                elif isinstance(item, ServerSideToolCallPart | ServerSideToolReturnPart):  # pragma: no cover
                     self._map_response_builtin_part(item)
                 elif isinstance(item, FilePart):  # pragma: no cover
                     self._map_response_file_part(item)
@@ -792,7 +792,7 @@ class OpenAIChatModel(Model):
             """
             self.tool_calls.append(self._model._map_tool_call(item))
 
-        def _map_response_builtin_part(self, item: BuiltinToolCallPart | BuiltinToolReturnPart) -> None:
+        def _map_response_builtin_part(self, item: ServerSideToolCallPart | ServerSideToolReturnPart) -> None:
             """Maps a built-in tool call or return part to the response context.
 
             This method serves as a hook that can be overridden by subclasses
@@ -1280,8 +1280,8 @@ class OpenAIResponsesModel(Model):
         model_request_parameters: ModelRequestParameters,
     ) -> responses.Response | AsyncStream[responses.ResponseStreamEvent]:
         tools = (
-            self._get_builtin_tools(model_request_parameters)
-            + list(model_settings.get('openai_builtin_tools', []))
+            self._get_server_side_tools(model_request_parameters)
+            + list(model_settings.get('openai_server_side_tools', []))
             + self._get_tools(model_request_parameters)
         )
         profile = OpenAIModelProfile.from_profile(self.profile)
@@ -1401,10 +1401,10 @@ class OpenAIResponsesModel(Model):
     def _get_tools(self, model_request_parameters: ModelRequestParameters) -> list[responses.FunctionToolParam]:
         return [self._map_tool_definition(r) for r in model_request_parameters.tool_defs.values()]
 
-    def _get_builtin_tools(self, model_request_parameters: ModelRequestParameters) -> list[responses.ToolParam]:
+    def _get_server_side_tools(self, model_request_parameters: ModelRequestParameters) -> list[responses.ToolParam]:
         tools: list[responses.ToolParam] = []
         has_image_generating_tool = False
-        for tool in model_request_parameters.builtin_tools:
+        for tool in model_request_parameters.server_side_tools:
             if isinstance(tool, WebSearchTool):
                 web_search_tool = responses.WebSearchToolParam(
                     type='web_search', search_context_size=tool.search_context_size
@@ -1591,7 +1591,7 @@ class OpenAIResponsesModel(Model):
                         if id and send_item_ids:  # pragma: no branch
                             param['id'] = id
                         openai_messages.append(param)
-                    elif isinstance(item, BuiltinToolCallPart):
+                    elif isinstance(item, ServerSideToolCallPart):
                         if item.provider_name == self.system and send_item_ids:  # pragma: no branch
                             if (
                                 item.tool_name == CodeExecutionTool.kind
@@ -1661,7 +1661,7 @@ class OpenAIResponsesModel(Model):
                                     )
                                     openai_messages.append(mcp_call_item)
 
-                    elif isinstance(item, BuiltinToolReturnPart):
+                    elif isinstance(item, ServerSideToolReturnPart):
                         if item.provider_name == self.system and send_item_ids:  # pragma: no branch
                             if (
                                 item.tool_name == CodeExecutionTool.kind
@@ -1680,15 +1680,15 @@ class OpenAIResponsesModel(Model):
                             ):
                                 web_search_item['status'] = status
                             elif item.tool_name == ImageGenerationTool.kind:
-                                # Image generation result does not need to be sent back, just the `id` off of `BuiltinToolCallPart`.
+                                # Image generation result does not need to be sent back, just the `id` off of `ServerSideToolCallPart`.
                                 pass
                             elif item.tool_name.startswith(MCPServerTool.kind):  # pragma: no branch
-                                # MCP call result does not need to be sent back, just the fields off of `BuiltinToolCallPart`.
+                                # MCP call result does not need to be sent back, just the fields off of `ServerSideToolCallPart`.
                                 pass
                     elif isinstance(item, FilePart):
                         # This was generated by the `ImageGenerationTool` or `CodeExecutionTool`,
-                        # and does not need to be sent back separately from the corresponding `BuiltinToolReturnPart`.
-                        # If `send_item_ids` is false, we won't send the `BuiltinToolReturnPart`, but OpenAI does not have a type for files from the assistant.
+                        # and does not need to be sent back separately from the corresponding `ServerSideToolReturnPart`.
+                        # If `send_item_ids` is false, we won't send the `ServerSideToolReturnPart`, but OpenAI does not have a type for files from the assistant.
                         pass
                     elif isinstance(item, ThinkingPart):
                         if item.id and send_item_ids:
@@ -2379,7 +2379,7 @@ def _split_combined_tool_call_id(combined_id: str) -> tuple[str, str | None]:
 
 def _map_code_interpreter_tool_call(
     item: responses.ResponseCodeInterpreterToolCall, provider_name: str
-) -> tuple[BuiltinToolCallPart, BuiltinToolReturnPart, list[FilePart]]:
+) -> tuple[ServerSideToolCallPart, ServerSideToolReturnPart, list[FilePart]]:
     result: dict[str, Any] = {
         'status': item.status,
     }
@@ -2404,7 +2404,7 @@ def _map_code_interpreter_tool_call(
         result['logs'] = logs
 
     return (
-        BuiltinToolCallPart(
+        ServerSideToolCallPart(
             tool_name=CodeExecutionTool.kind,
             tool_call_id=item.id,
             args={
@@ -2413,7 +2413,7 @@ def _map_code_interpreter_tool_call(
             },
             provider_name=provider_name,
         ),
-        BuiltinToolReturnPart(
+        ServerSideToolReturnPart(
             tool_name=CodeExecutionTool.kind,
             tool_call_id=item.id,
             content=result,
@@ -2425,7 +2425,7 @@ def _map_code_interpreter_tool_call(
 
 def _map_web_search_tool_call(
     item: responses.ResponseFunctionWebSearch, provider_name: str
-) -> tuple[BuiltinToolCallPart, BuiltinToolReturnPart]:
+) -> tuple[ServerSideToolCallPart, ServerSideToolReturnPart]:
     args: dict[str, Any] | None = None
 
     result = {
@@ -2440,13 +2440,13 @@ def _map_web_search_tool_call(
             result['sources'] = sources
 
     return (
-        BuiltinToolCallPart(
+        ServerSideToolCallPart(
             tool_name=WebSearchTool.kind,
             tool_call_id=item.id,
             args=args,
             provider_name=provider_name,
         ),
-        BuiltinToolReturnPart(
+        ServerSideToolReturnPart(
             tool_name=WebSearchTool.kind,
             tool_call_id=item.id,
             content=result,
@@ -2457,7 +2457,7 @@ def _map_web_search_tool_call(
 
 def _map_image_generation_tool_call(
     item: responses.response_output_item.ImageGenerationCall, provider_name: str
-) -> tuple[BuiltinToolCallPart, BuiltinToolReturnPart, FilePart | None]:
+) -> tuple[ServerSideToolCallPart, ServerSideToolReturnPart, FilePart | None]:
     result = {
         'status': item.status,
     }
@@ -2488,12 +2488,12 @@ def _map_image_generation_tool_call(
         result['status'] = 'completed'
 
     return (
-        BuiltinToolCallPart(
+        ServerSideToolCallPart(
             tool_name=ImageGenerationTool.kind,
             tool_call_id=item.id,
             provider_name=provider_name,
         ),
-        BuiltinToolReturnPart(
+        ServerSideToolReturnPart(
             tool_name=ImageGenerationTool.kind,
             tool_call_id=item.id,
             content=result,
@@ -2505,16 +2505,16 @@ def _map_image_generation_tool_call(
 
 def _map_mcp_list_tools(
     item: responses.response_output_item.McpListTools, provider_name: str
-) -> tuple[BuiltinToolCallPart, BuiltinToolReturnPart]:
+) -> tuple[ServerSideToolCallPart, ServerSideToolReturnPart]:
     tool_name = ':'.join([MCPServerTool.kind, item.server_label])
     return (
-        BuiltinToolCallPart(
+        ServerSideToolCallPart(
             tool_name=tool_name,
             tool_call_id=item.id,
             provider_name=provider_name,
             args={'action': 'list_tools'},
         ),
-        BuiltinToolReturnPart(
+        ServerSideToolReturnPart(
             tool_name=tool_name,
             tool_call_id=item.id,
             content=item.model_dump(mode='json', include={'tools', 'error'}),
@@ -2525,10 +2525,10 @@ def _map_mcp_list_tools(
 
 def _map_mcp_call(
     item: responses.response_output_item.McpCall, provider_name: str
-) -> tuple[BuiltinToolCallPart, BuiltinToolReturnPart]:
+) -> tuple[ServerSideToolCallPart, ServerSideToolReturnPart]:
     tool_name = ':'.join([MCPServerTool.kind, item.server_label])
     return (
-        BuiltinToolCallPart(
+        ServerSideToolCallPart(
             tool_name=tool_name,
             tool_call_id=item.id,
             args={
@@ -2538,7 +2538,7 @@ def _map_mcp_call(
             },
             provider_name=provider_name,
         ),
-        BuiltinToolReturnPart(
+        ServerSideToolReturnPart(
             tool_name=tool_name,
             tool_call_id=item.id,
             content={

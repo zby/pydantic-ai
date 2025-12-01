@@ -36,7 +36,7 @@ from .._agent_graph import (
 )
 from .._output import OutputToolset
 from .._tool_manager import ToolManager
-from ..builtin_tools import AbstractBuiltinTool
+from ..server_side_tools import AbstractServerSideTool
 from ..models.instrumented import InstrumentationSettings, InstrumentedModel, instrument_model
 from ..output import OutputDataT, OutputSpec
 from ..run import AgentRun, AgentRunResult
@@ -170,7 +170,7 @@ class Agent(AbstractAgent[AgentDepsT, OutputDataT]):
         validation_context: Any | Callable[[RunContext[AgentDepsT]], Any] = None,
         output_retries: int | None = None,
         tools: Sequence[Tool[AgentDepsT] | ToolFuncEither[AgentDepsT, ...]] = (),
-        builtin_tools: Sequence[AbstractBuiltinTool] = (),
+        server_side_tools: Sequence[AbstractServerSideTool] = (),
         prepare_tools: ToolsPrepareFunc[AgentDepsT] | None = None,
         prepare_output_tools: ToolsPrepareFunc[AgentDepsT] | None = None,
         toolsets: Sequence[AbstractToolset[AgentDepsT] | ToolsetFunc[AgentDepsT]] | None = None,
@@ -197,7 +197,7 @@ class Agent(AbstractAgent[AgentDepsT, OutputDataT]):
         validation_context: Any | Callable[[RunContext[AgentDepsT]], Any] = None,
         output_retries: int | None = None,
         tools: Sequence[Tool[AgentDepsT] | ToolFuncEither[AgentDepsT, ...]] = (),
-        builtin_tools: Sequence[AbstractBuiltinTool] = (),
+        server_side_tools: Sequence[AbstractServerSideTool] = (),
         prepare_tools: ToolsPrepareFunc[AgentDepsT] | None = None,
         prepare_output_tools: ToolsPrepareFunc[AgentDepsT] | None = None,
         mcp_servers: Sequence[MCPServer] = (),
@@ -222,7 +222,7 @@ class Agent(AbstractAgent[AgentDepsT, OutputDataT]):
         validation_context: Any | Callable[[RunContext[AgentDepsT]], Any] = None,
         output_retries: int | None = None,
         tools: Sequence[Tool[AgentDepsT] | ToolFuncEither[AgentDepsT, ...]] = (),
-        builtin_tools: Sequence[AbstractBuiltinTool] = (),
+        server_side_tools: Sequence[AbstractServerSideTool] = (),
         prepare_tools: ToolsPrepareFunc[AgentDepsT] | None = None,
         prepare_output_tools: ToolsPrepareFunc[AgentDepsT] | None = None,
         toolsets: Sequence[AbstractToolset[AgentDepsT] | ToolsetFunc[AgentDepsT]] | None = None,
@@ -257,8 +257,8 @@ class Agent(AbstractAgent[AgentDepsT, OutputDataT]):
             output_retries: The maximum number of retries to allow for output validation, defaults to `retries`.
             tools: Tools to register with the agent, you can also register tools via the decorators
                 [`@agent.tool`][pydantic_ai.Agent.tool] and [`@agent.tool_plain`][pydantic_ai.Agent.tool_plain].
-            builtin_tools: The builtin tools that the agent will use. This depends on the model, as some models may not
-                support certain tools. If the model doesn't support the builtin tools, an error will be raised.
+            server_side_tools: The server-side tools that the agent will use. This depends on the model, as some models may not
+                support certain tools. If the model doesn't support the server-side tools, an error will be raised.
             prepare_tools: Custom function to prepare the tool definition of all tools for each step, except output tools.
                 This is useful if you want to customize the definition of multiple tools or you want to register
                 a subset of tools for a given step. See [`ToolsPrepareFunc`][pydantic_ai.tools.ToolsPrepareFunc]
@@ -305,6 +305,12 @@ class Agent(AbstractAgent[AgentDepsT, OutputDataT]):
             warnings.warn('`mcp_servers` is deprecated, use `toolsets` instead', DeprecationWarning)
             toolsets = mcp_servers
 
+        if builtin_tools := _deprecated_kwargs.pop('builtin_tools', None):
+            if server_side_tools:  # pragma: no cover
+                raise TypeError('`builtin_tools` and `server_side_tools` cannot be set at the same time.')
+            warnings.warn('`builtin_tools` is deprecated, use `server_side_tools` instead', DeprecationWarning)
+            server_side_tools = builtin_tools
+
         _utils.validate_empty_kwargs(_deprecated_kwargs)
 
         self._output_schema = _output.OutputSchema[OutputDataT].build(output_type)
@@ -321,7 +327,7 @@ class Agent(AbstractAgent[AgentDepsT, OutputDataT]):
 
         self._validation_context = validation_context
 
-        self._builtin_tools = builtin_tools
+        self._server_side_tools = server_side_tools
 
         self._prepare_tools = prepare_tools
         self._prepare_output_tools = prepare_output_tools
@@ -427,7 +433,7 @@ class Agent(AbstractAgent[AgentDepsT, OutputDataT]):
         usage: _usage.RunUsage | None = None,
         infer_name: bool = True,
         toolsets: Sequence[AbstractToolset[AgentDepsT]] | None = None,
-        builtin_tools: Sequence[AbstractBuiltinTool] | None = None,
+        server_side_tools: Sequence[AbstractServerSideTool] | None = None,
     ) -> AbstractAsyncContextManager[AgentRun[AgentDepsT, OutputDataT]]: ...
 
     @overload
@@ -446,7 +452,7 @@ class Agent(AbstractAgent[AgentDepsT, OutputDataT]):
         usage: _usage.RunUsage | None = None,
         infer_name: bool = True,
         toolsets: Sequence[AbstractToolset[AgentDepsT]] | None = None,
-        builtin_tools: Sequence[AbstractBuiltinTool] | None = None,
+        server_side_tools: Sequence[AbstractServerSideTool] | None = None,
     ) -> AbstractAsyncContextManager[AgentRun[AgentDepsT, RunOutputDataT]]: ...
 
     @asynccontextmanager
@@ -465,7 +471,7 @@ class Agent(AbstractAgent[AgentDepsT, OutputDataT]):
         usage: _usage.RunUsage | None = None,
         infer_name: bool = True,
         toolsets: Sequence[AbstractToolset[AgentDepsT]] | None = None,
-        builtin_tools: Sequence[AbstractBuiltinTool] | None = None,
+        server_side_tools: Sequence[AbstractServerSideTool] | None = None,
     ) -> AsyncIterator[AgentRun[AgentDepsT, Any]]:
         """A contextmanager which can be used to iterate over the agent graph's nodes as they are executed.
 
@@ -541,7 +547,7 @@ class Agent(AbstractAgent[AgentDepsT, OutputDataT]):
             usage: Optional usage to start with, useful for resuming a conversation or agents used in tools.
             infer_name: Whether to try to infer the agent name from the call frame if it's not set.
             toolsets: Optional additional toolsets for this run.
-            builtin_tools: Optional additional builtin tools for this run.
+            server_side_tools: Optional additional server-side tools for this run.
 
         Returns:
             The result of the run.
@@ -621,7 +627,7 @@ class Agent(AbstractAgent[AgentDepsT, OutputDataT]):
             output_validators=output_validators,
             validation_context=self._validation_context,
             history_processors=self.history_processors,
-            builtin_tools=[*self._builtin_tools, *(builtin_tools or [])],
+            server_side_tools=[*self._server_side_tools, *(server_side_tools or [])],
             tool_manager=tool_manager,
             tracer=tracer,
             get_instructions=get_instructions,

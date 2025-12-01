@@ -10,8 +10,6 @@ from pydantic_ai import (
     AudioUrl,
     BinaryContent,
     BinaryImage,
-    BuiltinToolCallPart,
-    BuiltinToolReturnPart,
     DocumentUrl,
     FilePart,
     ImageUrl,
@@ -20,6 +18,8 @@ from pydantic_ai import (
     ModelRequest,
     ModelResponse,
     RequestUsage,
+    ServerSideToolCallPart,
+    ServerSideToolReturnPart,
     TextPart,
     ThinkingPart,
     ThinkingPartDelta,
@@ -515,7 +515,7 @@ def test_model_response_convenience_methods():
     assert response.files == snapshot([])
     assert response.images == snapshot([])
     assert response.tool_calls == snapshot([])
-    assert response.builtin_tool_calls == snapshot([])
+    assert response.server_side_tool_calls == snapshot([])
 
     response = ModelResponse(
         parts=[
@@ -523,9 +523,9 @@ def test_model_response_convenience_methods():
             ThinkingPart(content="And then, call the 'hello_world' tool"),
             TextPart(content="I'm going to"),
             TextPart(content=' generate an image'),
-            BuiltinToolCallPart(tool_name='image_generation', args={}, tool_call_id='123'),
+            ServerSideToolCallPart(tool_name='image_generation', args={}, tool_call_id='123'),
             FilePart(content=BinaryImage(data=b'fake', media_type='image/jpeg')),
-            BuiltinToolReturnPart(tool_name='image_generation', content={}, tool_call_id='123'),
+            ServerSideToolReturnPart(tool_name='image_generation', content={}, tool_call_id='123'),
             TextPart(content="I'm going to call"),
             TextPart(content=" the 'hello_world' tool"),
             ToolCallPart(tool_name='hello_world', args={}, tool_call_id='123'),
@@ -544,11 +544,11 @@ And then, call the 'hello_world' tool\
     assert response.files == snapshot([BinaryImage(data=b'fake', media_type='image/jpeg', identifier='c053ec')])
     assert response.images == snapshot([BinaryImage(data=b'fake', media_type='image/jpeg', identifier='c053ec')])
     assert response.tool_calls == snapshot([ToolCallPart(tool_name='hello_world', args={}, tool_call_id='123')])
-    assert response.builtin_tool_calls == snapshot(
+    assert response.server_side_tool_calls == snapshot(
         [
             (
-                BuiltinToolCallPart(tool_name='image_generation', args={}, tool_call_id='123'),
-                BuiltinToolReturnPart(
+                ServerSideToolCallPart(tool_name='image_generation', args={}, tool_call_id='123'),
+                ServerSideToolReturnPart(
                     tool_name='image_generation',
                     content={},
                     tool_call_id='123',
@@ -557,6 +557,13 @@ And then, call the 'hello_world' tool\
             )
         ]
     )
+
+
+def test_builtin_tool_calls_deprecated():
+    """Test that the deprecated builtin_tool_calls property issues a deprecation warning."""
+    response = ModelResponse(parts=[])
+    with pytest.warns(DeprecationWarning, match='`builtin_tool_calls` is deprecated'):
+        _ = response.builtin_tool_calls
 
 
 def test_image_url_validation_with_optional_identifier():

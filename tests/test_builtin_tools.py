@@ -4,8 +4,8 @@ import pytest
 from pydantic import TypeAdapter
 
 from pydantic_ai.agent import Agent
-from pydantic_ai.builtin_tools import (
-    AbstractBuiltinTool,
+from pydantic_ai.server_side_tools import (
+    AbstractServerSideTool,
     CodeExecutionTool,
     UrlContextTool,  # pyright: ignore[reportDeprecated]
     WebFetchTool,
@@ -17,7 +17,7 @@ from pydantic_ai.models import Model
 
 @pytest.mark.parametrize('model', ('bedrock', 'mistral', 'cohere', 'huggingface', 'test', 'outlines'), indirect=True)
 async def test_builtin_tools_not_supported_web_search(model: Model, allow_model_requests: None):
-    agent = Agent(model=model, builtin_tools=[WebSearchTool()])
+    agent = Agent(model=model, server_side_tools=[WebSearchTool()])
 
     with pytest.raises(UserError):
         await agent.run('What day is tomorrow?')
@@ -25,7 +25,7 @@ async def test_builtin_tools_not_supported_web_search(model: Model, allow_model_
 
 @pytest.mark.parametrize('model', ('bedrock', 'mistral', 'huggingface', 'outlines'), indirect=True)
 async def test_builtin_tools_not_supported_web_search_stream(model: Model, allow_model_requests: None):
-    agent = Agent(model=model, builtin_tools=[WebSearchTool()])
+    agent = Agent(model=model, server_side_tools=[WebSearchTool()])
 
     with pytest.raises(UserError):
         async with agent.run_stream('What day is tomorrow?'):
@@ -34,7 +34,7 @@ async def test_builtin_tools_not_supported_web_search_stream(model: Model, allow
 
 @pytest.mark.parametrize('model', ('groq', 'openai', 'outlines'), indirect=True)
 async def test_builtin_tools_not_supported_code_execution(model: Model, allow_model_requests: None):
-    agent = Agent(model=model, builtin_tools=[CodeExecutionTool()])
+    agent = Agent(model=model, server_side_tools=[CodeExecutionTool()])
 
     with pytest.raises(UserError):
         await agent.run('What day is tomorrow?')
@@ -42,7 +42,7 @@ async def test_builtin_tools_not_supported_code_execution(model: Model, allow_mo
 
 @pytest.mark.parametrize('model', ('groq', 'openai', 'outlines'), indirect=True)
 async def test_builtin_tools_not_supported_code_execution_stream(model: Model, allow_model_requests: None):
-    agent = Agent(model=model, builtin_tools=[CodeExecutionTool()])
+    agent = Agent(model=model, server_side_tools=[CodeExecutionTool()])
 
     with pytest.raises(UserError):
         async with agent.run_stream('What day is tomorrow?'):
@@ -57,7 +57,7 @@ def test_url_context_tool_is_deprecated():
 
 def test_url_context_tool_backward_compatibility():
     """Test that old payloads with 'url_context' kind can be deserialized."""
-    adapter = TypeAdapter(AbstractBuiltinTool)
+    adapter = TypeAdapter(AbstractServerSideTool)
 
     # Test 1: Old payload with url_context should deserialize to UrlContextTool (which is deprecated)
     old_payload = {'kind': 'url_context', 'max_uses': 5, 'enable_citations': True}
@@ -85,7 +85,7 @@ def test_url_context_tool_backward_compatibility():
 
 def test_url_context_tool_instance_behavior():
     """Test that UrlContextTool instances work correctly with deprecation warning."""
-    adapter = TypeAdapter(AbstractBuiltinTool)
+    adapter = TypeAdapter(AbstractServerSideTool)
 
     # Create instance with deprecation warning
     with pytest.warns(DeprecationWarning, match='Use `WebFetchTool` instead.'):
@@ -105,7 +105,7 @@ def test_url_context_tool_instance_behavior():
 
 def test_url_context_discriminated_union():
     """Test that the discriminated union correctly handles both url_context and web_fetch."""
-    adapter = TypeAdapter(list[AbstractBuiltinTool])
+    adapter = TypeAdapter(list[AbstractServerSideTool])
 
     # Mix of old and new payloads
     payloads = [

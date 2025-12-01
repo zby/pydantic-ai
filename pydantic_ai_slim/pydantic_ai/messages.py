@@ -872,8 +872,8 @@ class ToolReturnPart(BaseToolReturnPart):
 
 
 @dataclass(repr=False)
-class BuiltinToolReturnPart(BaseToolReturnPart):
-    """A tool return message from a built-in tool."""
+class ServerSideToolReturnPart(BaseToolReturnPart):
+    """A tool return message from a server-side tool."""
 
     _: KW_ONLY
 
@@ -885,8 +885,15 @@ class BuiltinToolReturnPart(BaseToolReturnPart):
 
     This is used for data that is required to be sent back to APIs, as well as data users may want to access programmatically."""
 
-    part_kind: Literal['builtin-tool-return'] = 'builtin-tool-return'
+    part_kind: Literal['server-side-tool-return', 'builtin-tool-return'] = 'server-side-tool-return'
     """Part type identifier, this is available on all parts as a discriminator."""
+
+
+@deprecated('Use `ServerSideToolReturnPart` instead.')
+class BuiltinToolReturnPart(ServerSideToolReturnPart):
+    """Deprecated alias for `ServerSideToolReturnPart`."""
+
+    pass
 
 
 error_details_ta = pydantic.TypeAdapter(list[pydantic_core.ErrorDetails], config=pydantic.ConfigDict(defer_build=True))
@@ -1194,23 +1201,30 @@ class ToolCallPart(BaseToolCallPart):
 
 
 @dataclass(repr=False)
-class BuiltinToolCallPart(BaseToolCallPart):
-    """A tool call to a built-in tool."""
+class ServerSideToolCallPart(BaseToolCallPart):
+    """A tool call to a server-side tool."""
 
     _: KW_ONLY
 
     provider_name: str | None = None
     """The name of the provider that generated the response.
 
-    Built-in tool calls are only sent back to the same provider.
+    Server-side tool calls are only sent back to the same provider.
     """
 
-    part_kind: Literal['builtin-tool-call'] = 'builtin-tool-call'
+    part_kind: Literal['server-side-tool-call', 'builtin-tool-call'] = 'server-side-tool-call'
     """Part type identifier, this is available on all parts as a discriminator."""
 
 
+@deprecated('Use `ServerSideToolCallPart` instead.')
+class BuiltinToolCallPart(ServerSideToolCallPart):
+    """Deprecated alias for `ServerSideToolCallPart`."""
+
+    pass
+
+
 ModelResponsePart = Annotated[
-    TextPart | ToolCallPart | BuiltinToolCallPart | BuiltinToolReturnPart | ThinkingPart | FilePart,
+    TextPart | ToolCallPart | ServerSideToolCallPart | ServerSideToolReturnPart | ThinkingPart | FilePart,
     pydantic.Discriminator('part_kind'),
 ]
 """A message part returned by a model."""
@@ -1312,17 +1326,25 @@ class ModelResponse:
         return [part for part in self.parts if isinstance(part, ToolCallPart)]
 
     @property
-    def builtin_tool_calls(self) -> list[tuple[BuiltinToolCallPart, BuiltinToolReturnPart]]:
-        """Get the builtin tool calls and results in the response."""
-        calls = [part for part in self.parts if isinstance(part, BuiltinToolCallPart)]
+    def server_side_tool_calls(self) -> list[tuple[ServerSideToolCallPart, ServerSideToolReturnPart]]:
+        """Get the server-side tool calls and results in the response."""
+        calls = [part for part in self.parts if isinstance(part, ServerSideToolCallPart)]
         if not calls:
             return []
-        returns_by_id = {part.tool_call_id: part for part in self.parts if isinstance(part, BuiltinToolReturnPart)}
+        returns_by_id = {part.tool_call_id: part for part in self.parts if isinstance(part, ServerSideToolReturnPart)}
         return [
             (call_part, returns_by_id[call_part.tool_call_id])
             for call_part in calls
             if call_part.tool_call_id in returns_by_id
         ]
+
+    @property
+    @deprecated('`builtin_tool_calls` is deprecated, use `server_side_tool_calls` instead.')
+    def builtin_tool_calls(
+        self,
+    ) -> list[tuple[ServerSideToolCallPart, ServerSideToolReturnPart]]:  # pyright: ignore[reportDeprecated]
+        """Deprecated alias for `server_side_tool_calls`."""
+        return self.server_side_tool_calls
 
     @deprecated('`price` is deprecated, use `cost` instead')
     def price(self) -> genai_types.PriceCalculation:  # pragma: no cover
@@ -1413,7 +1435,7 @@ class ModelResponse:
                 parts.append(converted_part)
             elif isinstance(part, BaseToolCallPart):
                 call_part = _otel_messages.ToolCallPart(type='tool_call', id=part.tool_call_id, name=part.tool_name)
-                if isinstance(part, BuiltinToolCallPart):
+                if isinstance(part, ServerSideToolCallPart):
                     call_part['builtin'] = True
                 if settings.include_content and part.args is not None:
                     from .models.instrumented import InstrumentedModel
@@ -1424,7 +1446,7 @@ class ModelResponse:
                         call_part['arguments'] = {k: InstrumentedModel.serialize_any(v) for k, v in part.args.items()}
 
                 parts.append(call_part)
-            elif isinstance(part, BuiltinToolReturnPart):
+            elif isinstance(part, ServerSideToolReturnPart):
                 return_part = _otel_messages.ToolCallResponsePart(
                     type='tool_call_response',
                     id=part.tool_call_id,
@@ -1622,39 +1644,39 @@ class ToolCallPartDelta:
         return ToolCallPart(self.tool_name_delta, self.args_delta, self.tool_call_id or _generate_tool_call_id())
 
     @overload
-    def apply(self, part: ModelResponsePart) -> ToolCallPart | BuiltinToolCallPart: ...
+    def apply(self, part: ModelResponsePart) -> ToolCallPart | ServerSideToolCallPart: ...
 
     @overload
     def apply(
         self, part: ModelResponsePart | ToolCallPartDelta
-    ) -> ToolCallPart | BuiltinToolCallPart | ToolCallPartDelta: ...
+    ) -> ToolCallPart | ServerSideToolCallPart | ToolCallPartDelta: ...
 
     def apply(
         self, part: ModelResponsePart | ToolCallPartDelta
-    ) -> ToolCallPart | BuiltinToolCallPart | ToolCallPartDelta:
+    ) -> ToolCallPart | ServerSideToolCallPart | ToolCallPartDelta:
         """Apply this delta to a part or delta, returning a new part or delta with the changes applied.
 
         Args:
             part: The existing model response part or delta to update.
 
         Returns:
-            Either a new `ToolCallPart` or `BuiltinToolCallPart`, or an updated `ToolCallPartDelta`.
+            Either a new `ToolCallPart` or `ServerSideToolCallPart`, or an updated `ToolCallPartDelta`.
 
         Raises:
-            ValueError: If `part` is neither a `ToolCallPart`, `BuiltinToolCallPart`, nor a `ToolCallPartDelta`.
+            ValueError: If `part` is neither a `ToolCallPart`, `ServerSideToolCallPart`, nor a `ToolCallPartDelta`.
             UnexpectedModelBehavior: If applying JSON deltas to dict arguments or vice versa.
         """
-        if isinstance(part, ToolCallPart | BuiltinToolCallPart):
+        if isinstance(part, ToolCallPart | ServerSideToolCallPart):
             return self._apply_to_part(part)
 
         if isinstance(part, ToolCallPartDelta):
             return self._apply_to_delta(part)
 
         raise ValueError(  # pragma: no cover
-            f'Can only apply ToolCallPartDeltas to ToolCallParts, BuiltinToolCallParts, or ToolCallPartDeltas, not {part}'
+            f'Can only apply ToolCallPartDeltas to ToolCallParts, ServerSideToolCallParts, or ToolCallPartDeltas, not {part}'
         )
 
-    def _apply_to_delta(self, delta: ToolCallPartDelta) -> ToolCallPart | BuiltinToolCallPart | ToolCallPartDelta:
+    def _apply_to_delta(self, delta: ToolCallPartDelta) -> ToolCallPart | ServerSideToolCallPart | ToolCallPartDelta:
         """Internal helper to apply this delta to another delta."""
         if self.tool_name_delta:
             # Append incremental text to the existing tool_name_delta
@@ -1685,8 +1707,8 @@ class ToolCallPartDelta:
 
         return delta
 
-    def _apply_to_part(self, part: ToolCallPart | BuiltinToolCallPart) -> ToolCallPart | BuiltinToolCallPart:
-        """Internal helper to apply this delta directly to a `ToolCallPart` or `BuiltinToolCallPart`."""
+    def _apply_to_part(self, part: ToolCallPart | ServerSideToolCallPart) -> ToolCallPart | ServerSideToolCallPart:
+        """Internal helper to apply this delta directly to a `ToolCallPart` or `ServerSideToolCallPart`."""
         if self.tool_name_delta:
             # Append incremental text to the existing tool_name
             tool_name = part.tool_name + self.tool_name_delta
@@ -1731,7 +1753,17 @@ class PartStartEvent:
     """The newly started `ModelResponsePart`."""
 
     previous_part_kind: (
-        Literal['text', 'thinking', 'tool-call', 'builtin-tool-call', 'builtin-tool-return', 'file'] | None
+        Literal[
+            'text',
+            'thinking',
+            'tool-call',
+            'server-side-tool-call',
+            'builtin-tool-call',
+            'server-side-tool-return',
+            'builtin-tool-return',
+            'file',
+        ]
+        | None
     ) = None
     """The kind of the previous part, if any.
 
@@ -1771,7 +1803,17 @@ class PartEndEvent:
     """The complete `ModelResponsePart`."""
 
     next_part_kind: (
-        Literal['text', 'thinking', 'tool-call', 'builtin-tool-call', 'builtin-tool-return', 'file'] | None
+        Literal[
+            'text',
+            'thinking',
+            'tool-call',
+            'server-side-tool-call',
+            'builtin-tool-call',
+            'server-side-tool-return',
+            'builtin-tool-return',
+            'file',
+        ]
+        | None
     ) = None
     """The kind of the next part, if any.
 
@@ -1853,43 +1895,63 @@ class FunctionToolResultEvent:
     __repr__ = _utils.dataclasses_no_defaults_repr
 
 
-@deprecated(
-    '`BuiltinToolCallEvent` is deprecated, look for `PartStartEvent` and `PartDeltaEvent` with `BuiltinToolCallPart` instead.'
-)
 @dataclass(repr=False)
-class BuiltinToolCallEvent:
-    """An event indicating the start to a call to a built-in tool."""
+class ServerSideToolCallEvent:
+    """An event indicating the start to a call to a server-side tool.
 
-    part: BuiltinToolCallPart
-    """The built-in tool call to make."""
+    .. deprecated::
+        Use `PartStartEvent` and `PartDeltaEvent` with `ServerSideToolCallPart` instead.
+    """
+
+    part: ServerSideToolCallPart
+    """The server-side tool call to make."""
 
     _: KW_ONLY
 
-    event_kind: Literal['builtin_tool_call'] = 'builtin_tool_call'
+    event_kind: Literal['server_side_tool_call', 'builtin_tool_call'] = 'server_side_tool_call'
     """Event type identifier, used as a discriminator."""
 
 
 @deprecated(
-    '`BuiltinToolResultEvent` is deprecated, look for `PartStartEvent` and `PartDeltaEvent` with `BuiltinToolReturnPart` instead.'
+    '`BuiltinToolCallEvent` is deprecated, use `PartStartEvent` and `PartDeltaEvent` with `ServerSideToolCallPart` instead.'
 )
-@dataclass(repr=False)
-class BuiltinToolResultEvent:
-    """An event indicating the result of a built-in tool call."""
+class BuiltinToolCallEvent(ServerSideToolCallEvent):
+    """Deprecated alias for `ServerSideToolCallEvent`."""
 
-    result: BuiltinToolReturnPart
-    """The result of the call to the built-in tool."""
+    pass
+
+
+@dataclass(repr=False)
+class ServerSideToolResultEvent:
+    """An event indicating the result of a server-side tool call.
+
+    .. deprecated::
+        Use `PartStartEvent` and `PartDeltaEvent` with `ServerSideToolReturnPart` instead.
+    """
+
+    result: ServerSideToolReturnPart
+    """The result of the call to the server-side tool."""
 
     _: KW_ONLY
 
-    event_kind: Literal['builtin_tool_result'] = 'builtin_tool_result'
+    event_kind: Literal['server_side_tool_result', 'builtin_tool_result'] = 'server_side_tool_result'
     """Event type identifier, used as a discriminator."""
+
+
+@deprecated(
+    '`BuiltinToolResultEvent` is deprecated, use `PartStartEvent` and `PartDeltaEvent` with `ServerSideToolReturnPart` instead.'
+)
+class BuiltinToolResultEvent(ServerSideToolResultEvent):
+    """Deprecated alias for `ServerSideToolResultEvent`."""
+
+    pass
 
 
 HandleResponseEvent = Annotated[
     FunctionToolCallEvent
     | FunctionToolResultEvent
-    | BuiltinToolCallEvent  # pyright: ignore[reportDeprecated]
-    | BuiltinToolResultEvent,  # pyright: ignore[reportDeprecated]
+    | ServerSideToolCallEvent
+    | ServerSideToolResultEvent,
     pydantic.Discriminator('event_kind'),
 ]
 """An event yielded when handling a model response, indicating tool calls and results."""

@@ -229,8 +229,8 @@ class HuggingFaceModel(Model):
         else:
             tool_choice = 'auto'
 
-        if model_request_parameters.builtin_tools:
-            raise UserError('HuggingFace does not support built-in tools')
+        if model_request_parameters.server_side_tools:
+            raise UserError('HuggingFace does not support server-side tools')
 
         hf_messages = await self._map_messages(messages, model_request_parameters)
 

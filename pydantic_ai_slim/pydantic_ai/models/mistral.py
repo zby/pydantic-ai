@@ -224,8 +224,8 @@ class MistralModel(Model):
         """Make a non-streaming request to the model."""
         # TODO(Marcelo): We need to replace the current MistralAI client to use the beta client.
         # See https://docs.mistral.ai/agents/connectors/websearch/ to support web search.
-        if model_request_parameters.builtin_tools:
-            raise UserError('Mistral does not support built-in tools')
+        if model_request_parameters.server_side_tools:
+            raise UserError('Mistral does not support server-side tools')
 
         try:
             response = await self.client.chat.complete_async(
@@ -263,8 +263,8 @@ class MistralModel(Model):
 
         # TODO(Marcelo): We need to replace the current MistralAI client to use the beta client.
         # See https://docs.mistral.ai/agents/connectors/websearch/ to support web search.
-        if model_request_parameters.builtin_tools:
-            raise UserError('Mistral does not support built-in tools')
+        if model_request_parameters.server_side_tools:
+            raise UserError('Mistral does not support server-side tools')
 
         if model_request_parameters.function_tools:
             # Function Calling

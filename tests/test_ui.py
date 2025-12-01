@@ -11,11 +11,11 @@ from pydantic import BaseModel
 
 from pydantic_ai import Agent
 from pydantic_ai._run_context import AgentDepsT
-from pydantic_ai.builtin_tools import WebSearchTool
+from pydantic_ai.server_side_tools import WebSearchTool
 from pydantic_ai.messages import (
     BinaryImage,
-    BuiltinToolCallPart,
-    BuiltinToolReturnPart,
+    ServerSideToolCallPart,
+    ServerSideToolReturnPart,
     FilePart,
     FinalResultEvent,
     FunctionToolCallEvent,
@@ -58,12 +58,6 @@ with try_import() as starlette_import_successful:
 pytestmark = [
     pytest.mark.anyio,
     pytest.mark.vcr,
-    pytest.mark.filterwarnings(
-        'ignore:`BuiltinToolCallEvent` is deprecated, look for `PartStartEvent` and `PartDeltaEvent` with `BuiltinToolCallPart` instead.:DeprecationWarning'
-    ),
-    pytest.mark.filterwarnings(
-        'ignore:`BuiltinToolResultEvent` is deprecated, look for `PartStartEvent` and `PartDeltaEvent` with `BuiltinToolReturnPart` instead.:DeprecationWarning'
-    ),
 ]
 
 
@@ -162,14 +156,14 @@ class DummyUIEventStream(UIEventStream[DummyUIRunInput, str, AgentDepsT, OutputD
     async def handle_tool_call_end(self, part: ToolCallPart) -> AsyncIterator[str]:
         yield f'</tool-call name={part.tool_name!r}>'
 
-    async def handle_builtin_tool_call_start(self, part: BuiltinToolCallPart) -> AsyncIterator[str]:
-        yield f'<builtin-tool-call name={part.tool_name!r}>{part.args}'
+    async def handle_server_side_tool_call_start(self, part: ServerSideToolCallPart) -> AsyncIterator[str]:
+        yield f'<server-side-tool-call name={part.tool_name!r}>{part.args}'
 
-    async def handle_builtin_tool_call_end(self, part: BuiltinToolCallPart) -> AsyncIterator[str]:
-        yield f'</builtin-tool-call name={part.tool_name!r}>'
+    async def handle_server_side_tool_call_end(self, part: ServerSideToolCallPart) -> AsyncIterator[str]:
+        yield f'</server-side-tool-call name={part.tool_name!r}>'
 
-    async def handle_builtin_tool_return(self, part: BuiltinToolReturnPart) -> AsyncIterator[str]:
-        yield f'<builtin-tool-return name={part.tool_name!r}>{part.content}</builtin-tool-return>'
+    async def handle_server_side_tool_return(self, part: ServerSideToolReturnPart) -> AsyncIterator[str]:
+        yield f'<server-side-tool-return name={part.tool_name!r}>{part.content}</server-side-tool-return>'
 
     async def handle_file(self, part: FilePart) -> AsyncIterator[str]:
         yield f'<file media_type={part.content.media_type!r} />'
@@ -284,7 +278,7 @@ async def test_run_stream_builtin_tool_call():
         messages: list[ModelMessage], agent_info: AgentInfo
     ) -> AsyncIterator[BuiltinToolCallsReturns | DeltaToolCalls | str]:
         yield {
-            0: BuiltinToolCallPart(
+            0: ServerSideToolCallPart(
                 tool_name=WebSearchTool.kind,
                 args='{"query":',
                 tool_call_id='search_1',
@@ -298,7 +292,7 @@ async def test_run_stream_builtin_tool_call():
             )
         }
         yield {
-            1: BuiltinToolReturnPart(
+            1: ServerSideToolReturnPart(
                 tool_name=WebSearchTool.kind,
                 content={
                     'results': [
@@ -324,10 +318,10 @@ async def test_run_stream_builtin_tool_call():
         [
             '<stream>',
             '<response>',
-            '<builtin-tool-call name=\'web_search\'>{"query":',
+            '<server-side-tool-call name=\'web_search\'>{"query":',
             '"Hello world"}',
-            "</builtin-tool-call name='web_search'>",
-            "<builtin-tool-return name='web_search'>{'results': [{'title': '\"Hello, World!\" program', 'url': 'https://en.wikipedia.org/wiki/%22Hello,_World!%22_program'}]}</builtin-tool-return>",
+            "</server-side-tool-call name='web_search'>",
+            "<server-side-tool-return name='web_search'>{'results': [{'title': '\"Hello, World!\" program', 'url': 'https://en.wikipedia.org/wiki/%22Hello,_World!%22_program'}]}</server-side-tool-return>",
             '<text follows_text=False>A "Hello, World!" program is usually a simple computer program that emits (or displays) to the screen (often the console) a message similar to "Hello, World!". ',
             '<final-result tool_name=None />',
             '</text followed_by_text=False>',

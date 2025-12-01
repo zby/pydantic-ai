@@ -433,8 +433,8 @@ class BedrockConverseModel(Model):
         if tool_config:
             params['toolConfig'] = tool_config
 
-        if model_request_parameters.builtin_tools:
-            raise UserError('Bedrock does not support built-in tools')
+        if model_request_parameters.server_side_tools:
+            raise UserError('Bedrock does not support server-side tools')
 
         # Bedrock supports a set of specific extra parameters
         if model_settings:

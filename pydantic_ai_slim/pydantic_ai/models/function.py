@@ -16,8 +16,8 @@ from .._run_context import RunContext
 from .._utils import PeekableAsyncStream
 from ..messages import (
     BinaryContent,
-    BuiltinToolCallPart,
-    BuiltinToolReturnPart,
+    ServerSideToolCallPart,
+    ServerSideToolReturnPart,
     FilePart,
     ModelMessage,
     ModelRequest,
@@ -264,7 +264,7 @@ DeltaToolCalls: TypeAlias = dict[int, DeltaToolCall]
 DeltaThinkingCalls: TypeAlias = dict[int, DeltaThinkingPart]
 """A mapping of thinking call IDs to incremental changes."""
 
-BuiltinToolCallsReturns: TypeAlias = dict[int, BuiltinToolCallPart | BuiltinToolReturnPart]
+BuiltinToolCallsReturns: TypeAlias = dict[int, ServerSideToolCallPart | ServerSideToolReturnPart]
 
 FunctionDef: TypeAlias = Callable[[list[ModelMessage], AgentInfo], ModelResponse | Awaitable[ModelResponse]]
 """A function used to generate a non-streamed response."""
@@ -324,12 +324,12 @@ class FunctionStreamedResponse(StreamedResponse):
                         )
                         if maybe_event is not None:  # pragma: no branch
                             yield maybe_event
-                    elif isinstance(delta, BuiltinToolCallPart):
+                    elif isinstance(delta, ServerSideToolCallPart):
                         if content := delta.args_as_json_str():  # pragma: no branch
                             response_tokens = _estimate_string_tokens(content)
                             self._usage += usage.RequestUsage(output_tokens=response_tokens)
                         yield self._parts_manager.handle_part(vendor_part_id=dtc_index, part=delta)
-                    elif isinstance(delta, BuiltinToolReturnPart):
+                    elif isinstance(delta, ServerSideToolReturnPart):
                         if content := delta.model_response_str():  # pragma: no branch
                             response_tokens = _estimate_string_tokens(content)
                             self._usage += usage.RequestUsage(output_tokens=response_tokens)
@@ -380,9 +380,9 @@ def _estimate_usage(messages: Iterable[ModelMessage]) -> usage.RequestUsage:
                     response_tokens += _estimate_string_tokens(part.content)
                 elif isinstance(part, ToolCallPart):
                     response_tokens += 1 + _estimate_string_tokens(part.args_as_json_str())
-                elif isinstance(part, BuiltinToolCallPart):
+                elif isinstance(part, ServerSideToolCallPart):
                     response_tokens += 1 + _estimate_string_tokens(part.args_as_json_str())
-                elif isinstance(part, BuiltinToolReturnPart):
+                elif isinstance(part, ServerSideToolReturnPart):
                     response_tokens += _estimate_string_tokens(part.model_response_str())
                 elif isinstance(part, FilePart):
                     response_tokens += _estimate_string_tokens([part.content])

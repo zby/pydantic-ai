@@ -17,8 +17,8 @@ from inline_snapshot import snapshot
 from pydantic import BaseModel
 
 from pydantic_ai import (
-    BuiltinToolCallPart,
-    BuiltinToolReturnPart,
+    ServerSideToolCallPart,
+    ServerSideToolReturnPart,
     FunctionToolCallEvent,
     FunctionToolResultEvent,
     ModelMessage,
@@ -38,7 +38,7 @@ from pydantic_ai import (
 )
 from pydantic_ai._run_context import RunContext
 from pydantic_ai.agent import Agent, AgentRunResult
-from pydantic_ai.builtin_tools import WebSearchTool
+from pydantic_ai.server_side_tools import WebSearchTool
 from pydantic_ai.models.function import (
     AgentInfo,
     BuiltinToolCallsReturns,
@@ -89,12 +89,6 @@ with try_import() as imports_successful:
 pytestmark = [
     pytest.mark.anyio,
     pytest.mark.skipif(not imports_successful(), reason='ag-ui-protocol not installed'),
-    pytest.mark.filterwarnings(
-        'ignore:`BuiltinToolCallEvent` is deprecated, look for `PartStartEvent` and `PartDeltaEvent` with `BuiltinToolCallPart` instead.:DeprecationWarning'
-    ),
-    pytest.mark.filterwarnings(
-        'ignore:`BuiltinToolResultEvent` is deprecated, look for `PartStartEvent` and `PartDeltaEvent` with `BuiltinToolReturnPart` instead.:DeprecationWarning'
-    ),
 ]
 
 
@@ -1529,13 +1523,13 @@ async def test_messages() -> None:
             ),
             ModelResponse(
                 parts=[
-                    BuiltinToolCallPart(
+                    ServerSideToolCallPart(
                         tool_name='web_search',
                         args='{"query": "Hello, world!"}',
                         tool_call_id='search_1',
                         provider_name='function',
                     ),
-                    BuiltinToolReturnPart(
+                    ServerSideToolReturnPart(
                         tool_name='web_search',
                         content='{"results": [{"title": "Hello, world!", "url": "https://en.wikipedia.org/wiki/Hello,_world!"}]}',
                         tool_call_id='search_1',
@@ -1581,7 +1575,7 @@ async def test_builtin_tool_call() -> None:
         messages: list[ModelMessage], agent_info: AgentInfo
     ) -> AsyncIterator[BuiltinToolCallsReturns | DeltaToolCalls | str]:
         yield {
-            0: BuiltinToolCallPart(
+            0: ServerSideToolCallPart(
                 tool_name=WebSearchTool.kind,
                 args='{"query":',
                 tool_call_id='search_1',
@@ -1595,7 +1589,7 @@ async def test_builtin_tool_call() -> None:
             )
         }
         yield {
-            1: BuiltinToolReturnPart(
+            1: ServerSideToolReturnPart(
                 tool_name=WebSearchTool.kind,
                 content={
                     'results': [

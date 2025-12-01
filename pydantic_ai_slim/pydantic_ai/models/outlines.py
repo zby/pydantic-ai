@@ -300,10 +300,10 @@ class OutlinesModel(Model):
         """Build the generation arguments for the model."""
         if (
             model_request_parameters.function_tools
-            or model_request_parameters.builtin_tools
+            or model_request_parameters.server_side_tools
             or model_request_parameters.output_tools
         ):
-            raise UserError('Outlines does not support function tools and builtin tools yet.')
+            raise UserError('Outlines does not support function tools and server-side tools yet.')
 
         if model_request_parameters.output_object:
             output_type = JsonSchema(model_request_parameters.output_object.json_schema)

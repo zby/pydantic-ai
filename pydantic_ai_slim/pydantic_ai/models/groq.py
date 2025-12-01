@@ -15,12 +15,10 @@ from .._output import DEFAULT_OUTPUT_TOOL_NAME, OutputObjectDefinition
 from .._run_context import RunContext
 from .._thinking_part import split_content_into_text_and_thinking
 from .._utils import generate_tool_call_id, guard_tool_call_id as _guard_tool_call_id, number_to_datetime
-from ..builtin_tools import WebSearchTool
+from ..server_side_tools import WebSearchTool
 from ..exceptions import ModelAPIError, UserError
 from ..messages import (
     BinaryContent,
-    BuiltinToolCallPart,
-    BuiltinToolReturnPart,
     DocumentUrl,
     FilePart,
     FinishReason,
@@ -31,6 +29,8 @@ from ..messages import (
     ModelResponsePart,
     ModelResponseStreamEvent,
     RetryPromptPart,
+    ServerSideToolCallPart,
+    ServerSideToolReturnPart,
     SystemPromptPart,
     TextPart,
     ThinkingPart,
@@ -264,7 +264,7 @@ class GroqModel(Model):
         model_request_parameters: ModelRequestParameters,
     ) -> chat.ChatCompletion | AsyncStream[chat.ChatCompletionChunk]:
         tools = self._get_tools(model_request_parameters)
-        tools += self._get_builtin_tools(model_request_parameters)
+        tools += self._get_server_side_tools(model_request_parameters)
         if not tools:
             tool_choice: Literal['none', 'required', 'auto'] | None = None
         elif not model_request_parameters.allow_text_output:
@@ -376,11 +376,11 @@ class GroqModel(Model):
     def _get_tools(self, model_request_parameters: ModelRequestParameters) -> list[chat.ChatCompletionToolParam]:
         return [self._map_tool_definition(r) for r in model_request_parameters.tool_defs.values()]
 
-    def _get_builtin_tools(
+    def _get_server_side_tools(
         self, model_request_parameters: ModelRequestParameters
     ) -> list[chat.ChatCompletionToolParam]:
         tools: list[chat.ChatCompletionToolParam] = []
-        for tool in model_request_parameters.builtin_tools:
+        for tool in model_request_parameters.server_side_tools:
             if isinstance(tool, WebSearchTool):
                 if not GroqModelProfile.from_profile(self.profile).groq_always_has_web_search_builtin_tool:
                     raise UserError('`WebSearchTool` is not supported by Groq')  # pragma: no cover
@@ -409,7 +409,7 @@ class GroqModel(Model):
                     elif isinstance(item, ThinkingPart):
                         start_tag, end_tag = self.profile.thinking_tags
                         texts.append('\n'.join([start_tag, item.content, end_tag]))
-                    elif isinstance(item, BuiltinToolCallPart | BuiltinToolReturnPart):  # pragma: no cover
+                    elif isinstance(item, ServerSideToolCallPart | ServerSideToolReturnPart):  # pragma: no cover
                         # These are not currently sent back
                         pass
                     elif isinstance(item, FilePart):  # pragma: no cover
@@ -673,7 +673,7 @@ class _GroqToolUseFailedError(BaseModel):
 
 def _map_executed_tool(
     tool: ExecutedTool, provider_name: str, streaming: bool = False, tool_call_id: str | None = None
-) -> tuple[BuiltinToolCallPart | None, BuiltinToolReturnPart | None]:
+) -> tuple[ServerSideToolCallPart | None, ServerSideToolReturnPart | None]:
     if tool.type == 'search':
         if tool.search_results and (tool.search_results.images or tool.search_results.results):
             results = tool.search_results.model_dump(mode='json')
@@ -681,13 +681,13 @@ def _map_executed_tool(
             results = tool.output
 
         tool_call_id = tool_call_id or generate_tool_call_id()
-        call_part = BuiltinToolCallPart(
+        call_part = ServerSideToolCallPart(
             tool_name=WebSearchTool.kind,
             args=from_json(tool.arguments),
             provider_name=provider_name,
             tool_call_id=tool_call_id,
         )
-        return_part = BuiltinToolReturnPart(
+        return_part = ServerSideToolReturnPart(
             tool_name=WebSearchTool.kind,
             content=results,
             provider_name=provider_name,

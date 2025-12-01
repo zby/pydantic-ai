@@ -20,7 +20,7 @@ from pydantic_ai._function_schema import _takes_ctx as is_takes_ctx  # type: ign
 from pydantic_ai._instrumentation import DEFAULT_INSTRUMENTATION_VERSION
 from pydantic_ai._tool_manager import ToolManager
 from pydantic_ai._utils import dataclasses_no_defaults_repr, get_union_args, is_async_callable, run_in_executor
-from pydantic_ai.builtin_tools import AbstractBuiltinTool
+from pydantic_ai.server_side_tools import AbstractServerSideTool
 from pydantic_graph import BaseNode, GraphRunContext
 from pydantic_graph.beta import Graph, GraphBuilder
 from pydantic_graph.nodes import End, NodeRunEndT
@@ -148,7 +148,7 @@ class GraphAgentDeps(Generic[DepsT, OutputDataT]):
 
     history_processors: Sequence[HistoryProcessor[DepsT]]
 
-    builtin_tools: list[AbstractBuiltinTool] = dataclasses.field(repr=False)
+    server_side_tools: list[AbstractServerSideTool] = dataclasses.field(repr=False)
     tool_manager: ToolManager[DepsT]
 
     tracer: Tracer
@@ -397,7 +397,7 @@ async def _prepare_request_parameters(
 
     return models.ModelRequestParameters(
         function_tools=function_tools,
-        builtin_tools=ctx.deps.builtin_tools,
+        server_side_tools=ctx.deps.server_side_tools,
         output_mode=output_schema.mode,
         output_tools=output_tools,
         output_object=output_schema.object_def,
@@ -640,13 +640,13 @@ class CallToolsNode(AgentNode[DepsT, NodeRunEndT]):
                         tool_calls.append(part)
                     elif isinstance(part, _messages.FilePart):
                         files.append(part.content)
-                    elif isinstance(part, _messages.BuiltinToolCallPart):
-                        # Text parts before a built-in tool call are essentially thoughts,
+                    elif isinstance(part, _messages.ServerSideToolCallPart):
+                        # Text parts before a server-side tool call are essentially thoughts,
                         # not part of the final result output, so we reset the accumulated text
                         text = ''
-                        yield _messages.BuiltinToolCallEvent(part)  # pyright: ignore[reportDeprecated]
-                    elif isinstance(part, _messages.BuiltinToolReturnPart):
-                        yield _messages.BuiltinToolResultEvent(part)  # pyright: ignore[reportDeprecated]
+                        yield _messages.ServerSideToolCallEvent(part)
+                    elif isinstance(part, _messages.ServerSideToolReturnPart):
+                        yield _messages.ServerSideToolResultEvent(part)
                     elif isinstance(part, _messages.ThinkingPart):
                         pass
                     else:

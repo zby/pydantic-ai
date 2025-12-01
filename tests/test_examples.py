@@ -23,8 +23,8 @@ from pytest_mock import MockerFixture
 from pydantic_ai import (
     AbstractToolset,
     BinaryImage,
-    BuiltinToolCallPart,
-    BuiltinToolReturnPart,
+    ServerSideToolCallPart,
+    ServerSideToolReturnPart,
     FilePart,
     ModelHTTPError,
     ModelMessage,
@@ -111,9 +111,6 @@ def tmp_path_cwd(tmp_path: Path):
 
 
 @pytest.mark.xdist_group(name='doc_tests')
-@pytest.mark.filterwarnings(  # TODO (v2): Remove this once we drop the deprecated events
-    'ignore:`BuiltinToolCallEvent` is deprecated', 'ignore:`BuiltinToolResultEvent` is deprecated'
-)
 @pytest.mark.parametrize('example', find_filter_examples())
 def test_docs_examples(
     example: CodeExample,
@@ -700,7 +697,7 @@ async def model_logic(  # noqa: C901
         elif m.content == 'Calculate the factorial of 15.':
             return ModelResponse(
                 parts=[
-                    BuiltinToolCallPart(
+                    ServerSideToolCallPart(
                         tool_name='code_execution',
                         args={
                             'code': 'import math\n\n# Calculate factorial of 15\nresult = math.factorial(15)\nprint(f"15! = {result}")\n\n# Let\'s also show it in a more readable format with commas\nprint(f"15! = {result:,}")'
@@ -708,7 +705,7 @@ async def model_logic(  # noqa: C901
                         tool_call_id='srvtoolu_017qRH1J3XrhnpjP2XtzPCmJ',
                         provider_name='anthropic',
                     ),
-                    BuiltinToolReturnPart(
+                    ServerSideToolReturnPart(
                         tool_name='code_execution',
                         content={
                             'content': [],

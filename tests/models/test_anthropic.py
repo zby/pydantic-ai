@@ -18,8 +18,8 @@ from pydantic import BaseModel, Field
 from pydantic_ai import (
     Agent,
     BinaryContent,
-    BuiltinToolCallPart,
-    BuiltinToolReturnPart,
+    ServerSideToolCallPart,
+    ServerSideToolReturnPart,
     CachePoint,
     DocumentUrl,
     FinalResultEvent,
@@ -45,11 +45,11 @@ from pydantic_ai import (
     UsageLimitExceeded,
     UserPromptPart,
 )
-from pydantic_ai.builtin_tools import CodeExecutionTool, MCPServerTool, MemoryTool, WebFetchTool, WebSearchTool
+from pydantic_ai.server_side_tools import CodeExecutionTool, MCPServerTool, MemoryTool, WebFetchTool, WebSearchTool
 from pydantic_ai.exceptions import UserError
 from pydantic_ai.messages import (
-    BuiltinToolCallEvent,  # pyright: ignore[reportDeprecated]
-    BuiltinToolResultEvent,  # pyright: ignore[reportDeprecated]
+    ServerSideToolCallEvent,
+    ServerSideToolResultEvent,
 )
 from pydantic_ai.models import ModelRequestParameters
 from pydantic_ai.output import NativeOutput, PromptedOutput, TextOutput, ToolOutput
@@ -112,12 +112,6 @@ pytestmark = [
     pytest.mark.skipif(not imports_successful(), reason='anthropic not installed'),
     pytest.mark.anyio,
     pytest.mark.vcr,
-    pytest.mark.filterwarnings(
-        'ignore:`BuiltinToolCallEvent` is deprecated, look for `PartStartEvent` and `PartDeltaEvent` with `BuiltinToolCallPart` instead.:DeprecationWarning'
-    ),
-    pytest.mark.filterwarnings(
-        'ignore:`BuiltinToolResultEvent` is deprecated, look for `PartStartEvent` and `PartDeltaEvent` with `BuiltinToolReturnPart` instead.:DeprecationWarning'
-    ),
 ]
 
 # Type variable for generic AsyncStream
@@ -625,8 +619,8 @@ async def test_anthropic_incompatible_schema_disables_auto_strict(allow_model_re
     assert 'strict' not in completion_kwargs['tools'][0]
 
 
-async def test_beta_header_merge_builtin_tools_and_native_output(allow_model_requests: None):
-    """Verify beta headers merge from custom headers, builtin tools, and native output."""
+async def test_beta_header_merge_server_side_tools_and_native_output(allow_model_requests: None):
+    """Verify beta headers merge from custom headers, server-side tools, and native output."""
     c = completion_message(
         [BetaTextBlock(text='{"city": "Mexico City", "country": "Mexico"}', type='text')],
         BetaUsage(input_tokens=5, output_tokens=10),
@@ -647,7 +641,7 @@ async def test_beta_header_merge_builtin_tools_and_native_output(allow_model_req
 
     agent = Agent(
         model,
-        builtin_tools=[MemoryTool()],
+        server_side_tools=[MemoryTool()],
         output_type=NativeOutput(CityLocation),
     )
 
@@ -2500,7 +2494,7 @@ What specific information about potatoes would be most helpful to you?\
 async def test_anthropic_web_search_tool(allow_model_requests: None, anthropic_api_key: str):
     m = AnthropicModel('claude-sonnet-4-0', provider=AnthropicProvider(api_key=anthropic_api_key))
     settings = AnthropicModelSettings(anthropic_thinking={'type': 'enabled', 'budget_tokens': 3000})
-    agent = Agent(m, builtin_tools=[WebSearchTool()], model_settings=settings)
+    agent = Agent(m, server_side_tools=[WebSearchTool()], model_settings=settings)
 
     result = await agent.run('What is the weather in San Francisco today?')
     assert result.all_messages() == snapshot(
@@ -2520,13 +2514,13 @@ I should search for San Francisco weather today to get the most current informat
                         signature='Et0ECkYIBxgCKkCXTXBKWJ3QYffHphenTDDE5jxo/vbyyvFuY7Gi5PGLYFdjxF0KQ4BGT7bGzB53hSRPgJtjUD975U7TZ4f9IheWEgy4pMKmvEJ0D9XDrxsaDDpjMZqhX/EnpJmjGyIwreKtd2Xj+RpguF1YI50dldiwk6qQNW2rK+xLwmWY5qF75b7WZrmOZ3endXYEQjBMKsQDmsnYnUODvD5Uh/yRIUgOp+6P5JrYjLabtsC3wfuIISLVe5QhC/3Ep7K/x55u97qy/DIhCAOz38x4YId37Pqq8XARrRq5CPwzxBzsMfPwpeV5eRHLQmasZxpOhivd1lMLC7B6D9EdpWefKWE+Ux1cMxpfaQj45cpMn93qLyCLGtNqnZJ2nPT7eoOtavZ9VvN5LsJOIWYEkxK+iq/6XYSJE5JlqBtDt9Y5P1QT/QnhFwfxjD/Cs3+RrGzKp2loEjmeYzNBwEfbY+pyKHJUS3bsxWyyi0d9Gc6Zfj4Xiuf/G0ninvXpSQheXi5gcvqIir6ZhcC40vHwvdVtJipSLkqMoPQcppCTOa2ATFyLKZIlug2OjoWIHrC5xnkCuKLXVMtHTF0mdrW0R/SgecnequYprzPeCc+Niqf4CVk62qtp+H06oWKQvHbP+s7kuAbdnhJjkcETiN8fP7+eLzKjRFAVnT0tixaNFjB6lWbg2ePyQDhqeVn6i/ULCzKyoY/hSIfZXUFwTCSDW42WvITFfPfWBBW+p6R/8peJ/KS2q0wHT2G3N4N7xFaNLOTXE0iPPtWsdqZw4cNQi9IUGKayqZ+/02tJYaEYAQ==',
                         provider_name='anthropic',
                     ),
-                    BuiltinToolCallPart(
+                    ServerSideToolCallPart(
                         tool_name='web_search',
                         args={'query': 'San Francisco weather today'},
                         tool_call_id='srvtoolu_01EoSNE7k4dUJyGatASCV5qs',
                         provider_name='anthropic',
                     ),
-                    BuiltinToolReturnPart(
+                    ServerSideToolReturnPart(
                         tool_name='web_search',
                         content=[
                             {
@@ -2724,13 +2718,13 @@ Overall, it's a pleasant day in San Francisco with mild temperatures and mostly 
                         signature='EqgCCkYIBxgCKkAhyrWtc4MfwZtLCpH/f41h3xS0UBTKetW5LA6ADj/q/8G5GiD+31L8MWU5+8QbLKrdzKIr5RZTEmval6pjPCxwEgygcM1WHSKHKa3PiscaDDtaNmY6L04w/DaCFSIw4mjvUNimq2ShpHNyVrezsnnXaRyyt2Ei4Iik2sCgzARFHGyDNzerHS/aCxzMR8MFKo8BVo7IxMBObxJIn43oG4aHroTyH4tX0IB3HPE1L1O/RZ9HfrmCc/KJwvIc79klaolMdyFvc343GJbssZxF1YJ+8YgGJtrzsKaawjsNelJBqkNWdF/TFwY0G+zGS90yWmHp4hFylIib5OTYz1Dm8O066biiZps8EDkINIoiIfkslPdnP3FWiCl9g6+gSiJd+WwYAQ==',
                         provider_name='anthropic',
                     ),
-                    BuiltinToolCallPart(
+                    ServerSideToolCallPart(
                         tool_name='web_search',
                         args={'query': 'Mexico City weather today'},
                         tool_call_id='srvtoolu_01SnV7n4h3ZQtz14JriSp4xa',
                         provider_name='anthropic',
                     ),
-                    BuiltinToolReturnPart(
+                    ServerSideToolReturnPart(
                         tool_name='web_search',
                         content=[
                             {
@@ -2907,7 +2901,7 @@ Mexico City is experiencing typical rainy season weather with moderate temperatu
 async def test_anthropic_model_web_search_tool_stream(allow_model_requests: None, anthropic_api_key: str):
     m = AnthropicModel('claude-sonnet-4-0', provider=AnthropicProvider(api_key=anthropic_api_key))
     settings = AnthropicModelSettings(anthropic_thinking={'type': 'enabled', 'budget_tokens': 3000})
-    agent = Agent(m, builtin_tools=[WebSearchTool()], model_settings=settings)
+    agent = Agent(m, server_side_tools=[WebSearchTool()], model_settings=settings)
 
     event_parts: list[Any] = []
     async with agent.iter(user_prompt='What is the weather in San Francisco today?') as agent_run:
@@ -2941,13 +2935,13 @@ I should search for current weather in San Francisco. I'll include "today" in th
                         signature='Er8ECkYIBxgCKkDp29haxwUos3j9hg3HNQI8e4jcFtinIsLxpzaQR/MhPnIpHkUpSNPatD/C2EVyiEGg2LIO1lhkU/P8XLgiyejFEgzinYyrRtGe03DeFEIaDL63CVUOAo1v/57lpSIw+msm1NHv1h+xLzkbu2YqlXPwjza0tVjwAj7RLUFwB1HpPbdv6hlityaMFb/SwKZZKqYDwbYu36cdPpUcpirpZaKZ/DITzfWJkX93BXmRl5au50mxAiFe9B8XxreADaofra5cmevEaaLH0b5Ze/IC0ja/cJdo9NoVlyHlqdXmex22CAkg0Y/HnsZr8MbnE6GyG9bOqAEhwb6YgKHMaMLDVmElbNSsD7luWtsbw5BDvRaqSSROzTxH4s0dqjUqJsoOBeUXuUqWHSl2KwQi8akELKUnvlDz15ZwFI1yVTHA5nSMFIhjB0jECs1g8PjFkAYTHkHddYR5/SLruy1ENpKU0xjc/hd/O41xnI3PxHBGDKv/hdeSVBKjJ0SDYIwXW96QS5vzlKxYGCqtibj2VxPzUlDITvhn1oO+cjCXClo1lE+ul//+nk7jk7fRkvl1/+pscYCpBoGKprA7CU1kpiggO9pAVUrpZM9vC2jF5/VVVYEoY3CyC+hrNpDWXTUdGdCTofhp2wdWVZzCmO7/+L8SUnlu64YYe9PWsRDuHRe8Lvl0M9EyBrhWnGWQkkk9b+O5uNU5xgE0sjbuGzgYswhwSd7Powb8XbtbW6h7lTbo1M2IQ3Ok0kdt0RAYAQ==',
                         provider_name='anthropic',
                     ),
-                    BuiltinToolCallPart(
+                    ServerSideToolCallPart(
                         tool_name='web_search',
                         args='{"query": "San Francisco weather today"}',
                         tool_call_id='srvtoolu_01FYcUbzEaqqQh1WBRj1QX3h',
                         provider_name='anthropic',
                     ),
-                    BuiltinToolReturnPart(
+                    ServerSideToolReturnPart(
                         tool_name='web_search',
                         content=[
                             {
@@ -3028,13 +3022,13 @@ I should search for current weather in San Francisco. I'll include "today" in th
                     TextPart(
                         content='Based on the search results, I can see that the information is a bit dated (most results are from about 6 days to a week ago), but I can provide you with the available weather information for San Francisco. Let me search for more current information.'
                     ),
-                    BuiltinToolCallPart(
+                    ServerSideToolCallPart(
                         tool_name='web_search',
                         args='{"query": "San Francisco weather September 16 2025"}',
                         tool_call_id='srvtoolu_01FDqc7ruGpVRoNuD5G6jkUx',
                         provider_name='anthropic',
                     ),
-                    BuiltinToolReturnPart(
+                    ServerSideToolReturnPart(
                         tool_name='web_search',
                         content=[
                             {
@@ -3268,11 +3262,11 @@ I should search for current weather in San Francisco. I'll include "today" in th
                     signature='Er8ECkYIBxgCKkDp29haxwUos3j9hg3HNQI8e4jcFtinIsLxpzaQR/MhPnIpHkUpSNPatD/C2EVyiEGg2LIO1lhkU/P8XLgiyejFEgzinYyrRtGe03DeFEIaDL63CVUOAo1v/57lpSIw+msm1NHv1h+xLzkbu2YqlXPwjza0tVjwAj7RLUFwB1HpPbdv6hlityaMFb/SwKZZKqYDwbYu36cdPpUcpirpZaKZ/DITzfWJkX93BXmRl5au50mxAiFe9B8XxreADaofra5cmevEaaLH0b5Ze/IC0ja/cJdo9NoVlyHlqdXmex22CAkg0Y/HnsZr8MbnE6GyG9bOqAEhwb6YgKHMaMLDVmElbNSsD7luWtsbw5BDvRaqSSROzTxH4s0dqjUqJsoOBeUXuUqWHSl2KwQi8akELKUnvlDz15ZwFI1yVTHA5nSMFIhjB0jECs1g8PjFkAYTHkHddYR5/SLruy1ENpKU0xjc/hd/O41xnI3PxHBGDKv/hdeSVBKjJ0SDYIwXW96QS5vzlKxYGCqtibj2VxPzUlDITvhn1oO+cjCXClo1lE+ul//+nk7jk7fRkvl1/+pscYCpBoGKprA7CU1kpiggO9pAVUrpZM9vC2jF5/VVVYEoY3CyC+hrNpDWXTUdGdCTofhp2wdWVZzCmO7/+L8SUnlu64YYe9PWsRDuHRe8Lvl0M9EyBrhWnGWQkkk9b+O5uNU5xgE0sjbuGzgYswhwSd7Powb8XbtbW6h7lTbo1M2IQ3Ok0kdt0RAYAQ==',
                     provider_name='anthropic',
                 ),
-                next_part_kind='builtin-tool-call',
+                next_part_kind='server-side-tool-call',
             ),
             PartStartEvent(
                 index=1,
-                part=BuiltinToolCallPart(
+                part=ServerSideToolCallPart(
                     tool_name='web_search', tool_call_id='srvtoolu_01FYcUbzEaqqQh1WBRj1QX3h', provider_name='anthropic'
                 ),
                 previous_part_kind='thinking',
@@ -3308,17 +3302,17 @@ I should search for current weather in San Francisco. I'll include "today" in th
             ),
             PartEndEvent(
                 index=1,
-                part=BuiltinToolCallPart(
+                part=ServerSideToolCallPart(
                     tool_name='web_search',
                     args='{"query": "San Francisco weather today"}',
                     tool_call_id='srvtoolu_01FYcUbzEaqqQh1WBRj1QX3h',
                     provider_name='anthropic',
                 ),
-                next_part_kind='builtin-tool-return',
+                next_part_kind='server-side-tool-return',
             ),
             PartStartEvent(
                 index=2,
-                part=BuiltinToolReturnPart(
+                part=ServerSideToolReturnPart(
                     tool_name='web_search',
                     content=[
                         {
@@ -3396,9 +3390,9 @@ I should search for current weather in San Francisco. I'll include "today" in th
                     timestamp=IsDatetime(),
                     provider_name='anthropic',
                 ),
-                previous_part_kind='builtin-tool-call',
+                previous_part_kind='server-side-tool-call',
             ),
-            PartStartEvent(index=3, part=TextPart(content='Base'), previous_part_kind='builtin-tool-return'),
+            PartStartEvent(index=3, part=TextPart(content='Base'), previous_part_kind='server-side-tool-return'),
             FinalResultEvent(tool_name=None, tool_call_id=None),
             PartDeltaEvent(index=3, delta=TextPartDelta(content_delta='d on the search results, I can see')),
             PartDeltaEvent(index=3, delta=TextPartDelta(content_delta=' that the information is a bit date')),
@@ -3415,11 +3409,11 @@ I should search for current weather in San Francisco. I'll include "today" in th
                 part=TextPart(
                     content='Based on the search results, I can see that the information is a bit dated (most results are from about 6 days to a week ago), but I can provide you with the available weather information for San Francisco. Let me search for more current information.'
                 ),
-                next_part_kind='builtin-tool-call',
+                next_part_kind='server-side-tool-call',
             ),
             PartStartEvent(
                 index=4,
-                part=BuiltinToolCallPart(
+                part=ServerSideToolCallPart(
                     tool_name='web_search', tool_call_id='srvtoolu_01FDqc7ruGpVRoNuD5G6jkUx', provider_name='anthropic'
                 ),
                 previous_part_kind='text',
@@ -3464,17 +3458,17 @@ I should search for current weather in San Francisco. I'll include "today" in th
             ),
             PartEndEvent(
                 index=4,
-                part=BuiltinToolCallPart(
+                part=ServerSideToolCallPart(
                     tool_name='web_search',
                     args='{"query": "San Francisco weather September 16 2025"}',
                     tool_call_id='srvtoolu_01FDqc7ruGpVRoNuD5G6jkUx',
                     provider_name='anthropic',
                 ),
-                next_part_kind='builtin-tool-return',
+                next_part_kind='server-side-tool-return',
             ),
             PartStartEvent(
                 index=5,
-                part=BuiltinToolReturnPart(
+                part=ServerSideToolReturnPart(
                     tool_name='web_search',
                     content=[
                         {
@@ -3552,9 +3546,9 @@ I should search for current weather in San Francisco. I'll include "today" in th
                     timestamp=IsDatetime(),
                     provider_name='anthropic',
                 ),
-                previous_part_kind='builtin-tool-call',
+                previous_part_kind='server-side-tool-call',
             ),
-            PartStartEvent(index=6, part=TextPart(content='Base'), previous_part_kind='builtin-tool-return'),
+            PartStartEvent(index=6, part=TextPart(content='Base'), previous_part_kind='server-side-tool-return'),
             PartDeltaEvent(
                 index=6,
                 delta=TextPartDelta(
@@ -3771,16 +3765,16 @@ So for today, you can expect partly sunny to sunny skies with a high around 76°
 """
                 ),
             ),
-            BuiltinToolCallEvent(  # pyright: ignore[reportDeprecated]
-                part=BuiltinToolCallPart(
+            ServerSideToolCallEvent(
+                part=ServerSideToolCallPart(
                     tool_name='web_search',
                     args='{"query": "San Francisco weather today"}',
                     tool_call_id='srvtoolu_01FYcUbzEaqqQh1WBRj1QX3h',
                     provider_name='anthropic',
                 )
             ),
-            BuiltinToolResultEvent(  # pyright: ignore[reportDeprecated]
-                result=BuiltinToolReturnPart(
+            ServerSideToolResultEvent(
+                result=ServerSideToolReturnPart(
                     tool_name='web_search',
                     content=[
                         {
@@ -3859,16 +3853,16 @@ So for today, you can expect partly sunny to sunny skies with a high around 76°
                     provider_name='anthropic',
                 )
             ),
-            BuiltinToolCallEvent(  # pyright: ignore[reportDeprecated]
-                part=BuiltinToolCallPart(
+            ServerSideToolCallEvent(
+                part=ServerSideToolCallPart(
                     tool_name='web_search',
                     args='{"query": "San Francisco weather September 16 2025"}',
                     tool_call_id='srvtoolu_01FDqc7ruGpVRoNuD5G6jkUx',
                     provider_name='anthropic',
                 )
             ),
-            BuiltinToolResultEvent(  # pyright: ignore[reportDeprecated]
-                result=BuiltinToolReturnPart(
+            ServerSideToolResultEvent(
+                result=ServerSideToolReturnPart(
                     tool_name='web_search',
                     content=[
                         {
@@ -3955,7 +3949,7 @@ So for today, you can expect partly sunny to sunny skies with a high around 76°
 async def test_anthropic_web_fetch_tool(allow_model_requests: None, anthropic_api_key: str):
     m = AnthropicModel('claude-sonnet-4-0', provider=AnthropicProvider(api_key=anthropic_api_key))
     settings = AnthropicModelSettings(anthropic_thinking={'type': 'enabled', 'budget_tokens': 3000})
-    agent = Agent(m, builtin_tools=[WebFetchTool()], model_settings=settings)
+    agent = Agent(m, server_side_tools=[WebFetchTool()], model_settings=settings)
 
     result = await agent.run(
         'What is the first sentence on the page https://ai.pydantic.dev? Reply with only the sentence.'
@@ -3987,13 +3981,13 @@ Let me fetch the page first.\
                         signature='EsIDCkYICRgCKkAKi/j4a8lGN12CjyS27ZXcPkXHGyTbn1vJENJz+AjinyTnsrynMEhidWT5IMNAs0TDgwSwPLNmgq4MsPkVekB8EgxetaK+Nhg8wUdhTEAaDMukODgr3JaYHZwVEiIwgKBckFLJ/C7wCD9oGCIECbqpaeEuWQ8BH3Hev6wpuc+66Wu7AJM1jGH60BpsUovnKqkCrHNq6b1SDT41cm2w7cyxZggrX6crzYh0fAkZ+VC6FBjy6mJikZtX6reKD+064KZ4F1oe4Qd40EBp/wHvD7oPV/fhGut1fzwl48ZgB8uzJb3tHr9MBjs4PVTsvKstpHKpOo6NLvCknQJ/0730OTENp/JOR6h6RUl6kMl5OrHTvsDEYpselUBPtLikm9p4t+d8CxqGm/B1kg1wN3FGJK31PD3veYIOO4hBirFPXWd+AiB1rZP++2QjToZ9lD2xqP/Q3vWEU+/Ryp6uzaRFWPVQkIr+mzpIaJsYuKDiyduxF4LD/hdMTV7IVDtconeQIPQJRhuO6nICBEuqb0uIotPDnCU6iI2l9OyEeKJM0RS6/NTNG8DZnvyVJ8gGKbtZKSHK6KKsdH0f7d+DGAE=',
                         provider_name='anthropic',
                     ),
-                    BuiltinToolCallPart(
+                    ServerSideToolCallPart(
                         tool_name='web_fetch',
                         args={'url': 'https://ai.pydantic.dev'},
                         tool_call_id=IsStr(),
                         provider_name='anthropic',
                     ),
-                    BuiltinToolReturnPart(
+                    ServerSideToolReturnPart(
                         tool_name='web_fetch',
                         content={
                             'content': {
@@ -4068,13 +4062,13 @@ Let me fetch the page first.\
                         signature='EsIDCkYICRgCKkAKi/j4a8lGN12CjyS27ZXcPkXHGyTbn1vJENJz+AjinyTnsrynMEhidWT5IMNAs0TDgwSwPLNmgq4MsPkVekB8EgxetaK+Nhg8wUdhTEAaDMukODgr3JaYHZwVEiIwgKBckFLJ/C7wCD9oGCIECbqpaeEuWQ8BH3Hev6wpuc+66Wu7AJM1jGH60BpsUovnKqkCrHNq6b1SDT41cm2w7cyxZggrX6crzYh0fAkZ+VC6FBjy6mJikZtX6reKD+064KZ4F1oe4Qd40EBp/wHvD7oPV/fhGut1fzwl48ZgB8uzJb3tHr9MBjs4PVTsvKstpHKpOo6NLvCknQJ/0730OTENp/JOR6h6RUl6kMl5OrHTvsDEYpselUBPtLikm9p4t+d8CxqGm/B1kg1wN3FGJK31PD3veYIOO4hBirFPXWd+AiB1rZP++2QjToZ9lD2xqP/Q3vWEU+/Ryp6uzaRFWPVQkIr+mzpIaJsYuKDiyduxF4LD/hdMTV7IVDtconeQIPQJRhuO6nICBEuqb0uIotPDnCU6iI2l9OyEeKJM0RS6/NTNG8DZnvyVJ8gGKbtZKSHK6KKsdH0f7d+DGAE=',
                         provider_name='anthropic',
                     ),
-                    BuiltinToolCallPart(
+                    ServerSideToolCallPart(
                         tool_name='web_fetch',
                         args={'url': 'https://ai.pydantic.dev'},
                         tool_call_id=IsStr(),
                         provider_name='anthropic',
                     ),
-                    BuiltinToolReturnPart(
+                    ServerSideToolReturnPart(
                         tool_name='web_fetch',
                         content={
                             'content': {
@@ -4189,7 +4183,7 @@ async def test_anthropic_web_fetch_tool_stream(
 
     m = AnthropicModel('claude-sonnet-4-0', provider=AnthropicProvider(api_key=anthropic_api_key))
     settings = AnthropicModelSettings(anthropic_thinking={'type': 'enabled', 'budget_tokens': 3000})
-    agent = Agent(m, builtin_tools=[WebFetchTool()], model_settings=settings)
+    agent = Agent(m, server_side_tools=[WebFetchTool()], model_settings=settings)
 
     # Iterate through the stream to ensure streaming code paths are covered
     event_parts: list[Any] = []
@@ -4202,7 +4196,7 @@ async def test_anthropic_web_fetch_tool_stream(
                     async for event in request_stream:  # pragma: lax no cover
                         if (  # pragma: lax no cover
                             isinstance(event, PartStartEvent)
-                            and isinstance(event.part, BuiltinToolCallPart | BuiltinToolReturnPart)
+                            and isinstance(event.part, ServerSideToolCallPart | ServerSideToolReturnPart)
                         ) or isinstance(event, PartDeltaEvent):
                             event_parts.append(event)
 
@@ -4229,13 +4223,13 @@ async def test_anthropic_web_fetch_tool_stream(
                         signature='EusCCkYICRgCKkAG/7zhRcmUoiMtml5iZUXVv3nqupp8kgk0nrq9zOoklaXzVCnrb9kwLNWGETIcCaAnLd0cd0ESwjslkVKdV9n8EgxKKdu8LlEvh9VGIWIaDAJ2Ja2NEacp1Am6jSIwyNO36tV+Sj+q6dWf79U+3KOIa1khXbIYarpkIViCuYQaZwpJ4Vtedrd7dLWTY2d5KtIB9Pug5UPuvepSOjyhxLaohtGxmdvZN8crGwBdTJYF9GHSli/rzvkR6CpH+ixd8iSopwFcsJgQ3j68fr/yD7cHmZ06jU3LaESVEBwTHnlK0ABiYnGvD3SvX6PgImMSQxQ1ThARFTA7DePoWw+z5DI0L2vgSun2qTYHkmGxzaEskhNIBlK9r7wS3tVcO0Di4lD/rhYV61tklL2NBWJqvm7ZCtJTN09CzPFJy7HDkg7bSINVL4kuu9gTWEtb/o40tw1b+sO62UcfxQTVFQ4Cj8D8XFZbGAE=',
                         provider_name='anthropic',
                     ),
-                    BuiltinToolCallPart(
+                    ServerSideToolCallPart(
                         tool_name='web_fetch',
                         args='{"url": "https://ai.pydantic.dev"}',
                         tool_call_id=IsStr(),
                         provider_name='anthropic',
                     ),
-                    BuiltinToolReturnPart(
+                    ServerSideToolReturnPart(
                         tool_name='web_fetch',
                         content={
                             'content': {
@@ -4315,7 +4309,7 @@ async def test_anthropic_web_fetch_tool_stream(
             ),
             PartStartEvent(
                 index=1,
-                part=BuiltinToolCallPart(tool_name='web_fetch', tool_call_id=IsStr(), provider_name='anthropic'),
+                part=ServerSideToolCallPart(tool_name='web_fetch', tool_call_id=IsStr(), provider_name='anthropic'),
                 previous_part_kind='thinking',
             ),
             PartDeltaEvent(
@@ -4341,7 +4335,7 @@ async def test_anthropic_web_fetch_tool_stream(
             ),
             PartStartEvent(
                 index=2,
-                part=BuiltinToolReturnPart(
+                part=ServerSideToolReturnPart(
                     tool_name='web_fetch',
                     content={
                         'content': {
@@ -4643,7 +4637,7 @@ Join [ Slack](https://logfire.pydantic.dev/docs/join-slack/) or file an issue on
                     timestamp=IsDatetime(),
                     provider_name='anthropic',
                 ),
-                previous_part_kind='builtin-tool-call',
+                previous_part_kind='server-side-tool-call',
             ),
             PartDeltaEvent(index=3, delta=TextPartDelta(content_delta='ydantic AI is a')),
             PartDeltaEvent(index=3, delta=TextPartDelta(content_delta=' Python')),
@@ -4669,7 +4663,7 @@ Join [ Slack](https://logfire.pydantic.dev/docs/join-slack/) or file an issue on
 
 
 async def test_anthropic_web_fetch_tool_message_replay():
-    """Test that BuiltinToolCallPart and BuiltinToolReturnPart for WebFetchTool are correctly serialized."""
+    """Test that ServerSideToolCallPart and ServerSideToolReturnPart for WebFetchTool are correctly serialized."""
     from typing import cast
 
     from pydantic_ai.models.anthropic import AnthropicModel
@@ -4678,18 +4672,18 @@ async def test_anthropic_web_fetch_tool_message_replay():
     # Create a model instance
     m = AnthropicModel('claude-sonnet-4-0', provider=AnthropicProvider(api_key='test-key'))
 
-    # Create message history with BuiltinToolCallPart and BuiltinToolReturnPart
+    # Create message history with ServerSideToolCallPart and ServerSideToolReturnPart
     messages = [
         ModelRequest(parts=[UserPromptPart(content='Test')]),
         ModelResponse(
             parts=[
-                BuiltinToolCallPart(
+                ServerSideToolCallPart(
                     provider_name=m.system,
                     tool_name=WebFetchTool.kind,
                     args={'url': 'https://example.com'},
                     tool_call_id='test_id_1',
                 ),
-                BuiltinToolReturnPart(
+                ServerSideToolReturnPart(
                     provider_name=m.system,
                     tool_name=WebFetchTool.kind,
                     content={
@@ -4709,7 +4703,7 @@ async def test_anthropic_web_fetch_tool_message_replay():
     model_settings = {}
     model_request_parameters = ModelRequestParameters(
         function_tools=[],
-        builtin_tools=[WebFetchTool()],
+        server_side_tools=[WebFetchTool()],
         output_tools=[],
     )
 
@@ -4759,12 +4753,12 @@ async def test_anthropic_web_fetch_tool_with_parameters():
 
     model_request_parameters = ModelRequestParameters(
         function_tools=[],
-        builtin_tools=[web_fetch_tool],
+        server_side_tools=[web_fetch_tool],
         output_tools=[],
     )
 
     # Get tools from model
-    tools, _, _ = m._add_builtin_tools([], model_request_parameters)  # pyright: ignore[reportPrivateUsage]
+    tools, _, _ = m._add_server_side_tools([], model_request_parameters)  # pyright: ignore[reportPrivateUsage]
 
     # Find the web_fetch tool
     web_fetch_tool_param = next((t for t in tools if t.get('name') == 'web_fetch'), None)
@@ -4792,12 +4786,12 @@ async def test_anthropic_web_fetch_tool_domain_filtering():
 
     model_request_parameters = ModelRequestParameters(
         function_tools=[],
-        builtin_tools=[web_fetch_tool],
+        server_side_tools=[web_fetch_tool],
         output_tools=[],
     )
 
     # Get tools from model
-    tools, _, _ = m._add_builtin_tools([], model_request_parameters)  # pyright: ignore[reportPrivateUsage]
+    tools, _, _ = m._add_server_side_tools([], model_request_parameters)  # pyright: ignore[reportPrivateUsage]
 
     # Find the web_fetch tool
     web_fetch_tool_param = next((t for t in tools if t.get('name') == 'web_fetch'), None)
@@ -4814,7 +4808,7 @@ async def test_anthropic_mcp_servers(allow_model_requests: None, anthropic_api_k
     settings = AnthropicModelSettings(anthropic_thinking={'type': 'enabled', 'budget_tokens': 3000})
     agent = Agent(
         m,
-        builtin_tools=[
+        server_side_tools=[
             MCPServerTool(
                 id='deepwiki',
                 url='https://mcp.deepwiki.com/mcp',
@@ -4843,7 +4837,7 @@ async def test_anthropic_mcp_servers(allow_model_requests: None, anthropic_api_k
                         signature='EqUDCkYICBgCKkCTiLjx5Rzw9zXo4pFDhFAc9Ci1R+d2fpkiqw7IPt1PgxBankr7bhRfh2iQOFEUy7sYVtsBxvnHW8zfBRxH1j6lEgySvdOyObrcFdJX3qkaDMAMCdLHIevZ/mSx/SIwi917U34N5jLQH1yMoCx/k72klLG5v42vcwUTG4ngKDI69Ddaf0eeDpgg3tL5FHfvKowCnslWg3Pd3ITe+TLlzu+OVZhRKU9SEwDJbjV7ZF954Ls6XExAfjdXhrhvXDB+hz6fZFPGFEfXV7jwElFT5HcGPWy84xvlwzbklZ2zH3XViik0B5dMErMAKs6IVwqXo3s+0p9xtX5gCBuvLkalET2upNsmdKGJv7WQWoaLch5N07uvSgWkO8AkGuVtBgqZH+uRGlPfYlnAgifNHu00GSAVK3beeyZfpnSQ6LQKcH+wVmrOi/3UvzA5f1LvsXG32gQKUCxztATnlBaI+7GMs1IAloaRHBndyRoe8Lwv79zZe9u9gnF9WCgK3yQsAR5hGZXlBKiIWfnRrXQ7QmA2hVO+mhEOCnz7OQkMIEUlfxgB',
                         provider_name='anthropic',
                     ),
-                    BuiltinToolCallPart(
+                    ServerSideToolCallPart(
                         tool_name='mcp_server:deepwiki',
                         args={
                             'action': 'call_tool',
@@ -4856,7 +4850,7 @@ async def test_anthropic_mcp_servers(allow_model_requests: None, anthropic_api_k
                         tool_call_id='mcptoolu_01SAss3KEwASziHZoMR6HcZU',
                         provider_name='anthropic',
                     ),
-                    BuiltinToolReturnPart(
+                    ServerSideToolReturnPart(
                         tool_name='mcp_server:deepwiki',
                         content={
                             'content': [
@@ -4929,7 +4923,7 @@ The repo is organized as a monorepo with core packages like `pydantic-ai-slim` (
                         signature='EtECCkYICBgCKkAkKy+K3Z/q4dGwZGr1MdsH8HLaULElUSaa/Y8A1L/Jp7y1AfJd1zrTL7Zfa2KoPr0HqO/AI/cJJreheuwcn/dWEgw0bPLie900a4h9wS0aDACnsdbr+adzpUyExiIwyuNjV82BVkK/kU+sMyrfbhgb6ob/DUgudJPaK5zR6cINAAGQnIy3iOXTwu3OUfPAKrgBzF9HD5HjiPSJdsxlkI0RA5Yjiol05/hR3fUB6WWrs0aouxIzlriJ6NzmzvqctkFJdRgAL9Mh06iK1A61PLyBWRdo1f5TBziFP1c6z7iQQzH9DdcaHvG8yLoaadbyTxMvTn2PtfEcSPjuZcLgv7QcF+HZXbDVjsHJW78OK2ta0M6/xuU1p4yG3qgoss3b0G6fAyvUVgVbb1wknkE/9W9gd2k/ZSh4P7F6AcvLTXQScTyMfWRtAWQqABgB',
                         provider_name='anthropic',
                     ),
-                    BuiltinToolCallPart(
+                    ServerSideToolCallPart(
                         tool_name='mcp_server:deepwiki',
                         args={
                             'action': 'call_tool',
@@ -4942,7 +4936,7 @@ The repo is organized as a monorepo with core packages like `pydantic-ai-slim` (
                         tool_call_id='mcptoolu_01A9RvAqDeoUnaMgQc6Nn75y',
                         provider_name='anthropic',
                     ),
-                    BuiltinToolReturnPart(
+                    ServerSideToolReturnPart(
                         tool_name='mcp_server:deepwiki',
                         content={
                             'content': [
@@ -5050,7 +5044,7 @@ async def test_anthropic_mcp_servers_stream(allow_model_requests: None, anthropi
     settings = AnthropicModelSettings(anthropic_thinking={'type': 'enabled', 'budget_tokens': 3000})
     agent = Agent(
         m,
-        builtin_tools=[
+        server_side_tools=[
             MCPServerTool(
                 id='deepwiki',
                 url='https://mcp.deepwiki.com/mcp',
@@ -5070,7 +5064,7 @@ async def test_anthropic_mcp_servers_stream(allow_model_requests: None, anthropi
                     async for event in request_stream:
                         if (
                             isinstance(event, PartStartEvent)
-                            and isinstance(event.part, BuiltinToolCallPart | BuiltinToolReturnPart)
+                            and isinstance(event.part, ServerSideToolCallPart | ServerSideToolReturnPart)
                         ) or (isinstance(event, PartDeltaEvent) and isinstance(event.delta, ToolCallPartDelta)):
                             event_parts.append(event)
 
@@ -5094,13 +5088,13 @@ async def test_anthropic_mcp_servers_stream(allow_model_requests: None, anthropi
                         signature='EuoCCkYICBgCKkDPqznnPHupi9rVXvaQQqrMprXof9wtQsCqw7Yw687UIk/FvF65omU22QO+CmIcYqTwhBfifPEp9A3/lM9C8cIcEgzGsjorcyNe2H0ZFf8aDCA4iLG6qgUL6fLhzCIwVWcg65CrvSFusXtMH18p+XiF+BUxT+rvnCFsnLbFsxtjGyKh1j4UW6V0Tk0O7+3sKtEBEzvxztXkMkeXkXRsQFJ00jTNhkUHu74sqnh6QxgV8wK2vlJRnBnes/oh7QdED0h/pZaUbxplYJiPFisWx/zTJQvOv29I46sM2CdY5ggGO1KWrEF/pognyod+jdCdb481XUET9T7nl/VMz/Og2QkyGf+5MvSecKQhujlS0VFhCgaYv68sl0Fv3hj2AkeE4vcYu3YdDaNDLXerbIaLCMkkn08NID/wKZTwtLSL+N6+kOi+4peGqXDNps8oa3mqIn7NAWFlwEUrFZd5kjtDkQ5dw/IYAQ==',
                         provider_name='anthropic',
                     ),
-                    BuiltinToolCallPart(
+                    ServerSideToolCallPart(
                         tool_name='mcp_server:deepwiki',
                         args='{"action":"call_tool","tool_name":"ask_question","tool_args":{"repoName": "pydantic/pydantic-ai", "question": "What is this repository about? What are its main features and purpose?"}}',
                         tool_call_id='mcptoolu_01FZmJ5UspaX5BB9uU339UT1',
                         provider_name='anthropic',
                     ),
-                    BuiltinToolReturnPart(
+                    ServerSideToolReturnPart(
                         tool_name='mcp_server:deepwiki',
                         content={
                             'content': [
@@ -5157,7 +5151,7 @@ It's designed to simplify building robust, production-ready AI agents while abst
         [
             PartStartEvent(
                 index=1,
-                part=BuiltinToolCallPart(
+                part=ServerSideToolCallPart(
                     tool_name='mcp_server:deepwiki',
                     tool_call_id='mcptoolu_01FZmJ5UspaX5BB9uU339UT1',
                     provider_name='anthropic',
@@ -5240,7 +5234,7 @@ It's designed to simplify building robust, production-ready AI agents while abst
             ),
             PartStartEvent(
                 index=2,
-                part=BuiltinToolReturnPart(
+                part=ServerSideToolReturnPart(
                     tool_name='mcp_server:deepwiki',
                     content={
                         'content': [
@@ -5325,7 +5319,7 @@ View this search on DeepWiki: https://deepwiki.com/search/what-is-this-repositor
                     timestamp=IsDatetime(),
                     provider_name='anthropic',
                 ),
-                previous_part_kind='builtin-tool-call',
+                previous_part_kind='server-side-tool-call',
             ),
         ]
     )
@@ -5336,7 +5330,7 @@ async def test_anthropic_code_execution_tool(allow_model_requests: None, anthrop
     settings = AnthropicModelSettings(anthropic_thinking={'type': 'enabled', 'budget_tokens': 3000})
     agent = Agent(
         m,
-        builtin_tools=[CodeExecutionTool()],
+        server_side_tools=[CodeExecutionTool()],
         model_settings=settings,
         instructions='Always use the code execution tool for math.',
     )
@@ -5357,7 +5351,7 @@ async def test_anthropic_code_execution_tool(allow_model_requests: None, anthrop
                         signature='EvsDCkYIBxgCKkCSFDXODoOrOHU14Yv7+TNxuR4sDsJKw9y9C1gGPIWqslF6apNZ1xwJ94E9KsQBfXlZ/ELoBSTj3YT0liwueN6kEgxrakXTN1a+YafcnckaDC2EYhQsezxdE/P7XSIwczAl/PquNGpiOLqC5DnYKvD2+F0JhBQsbLe1bQi/VR0XCQdd+4DZ5dBU5AmuDcntKuICIMg145F3vP8bFnTdUMOIQY0NASypKRnHj6owIkuqWJ+pwu6OdpDt2a+Lr7R1dw860hcPjEp65eg5nwtyi8bw1pzfQJmC48DoiQn/OYeiXMWeNv5HoKEK/lkikqVPcTnD03MytUsNGRqUBfDvr4bxNgxqeAENi5pZ21ySnjxhC879gN0G3uriEM8o4LXj/X2DotKO1lvIEL/2RQZGrFulDLq5I2FW51YBY3kzHerK7zwFgs3t39VLsy7Q3T6sLi4yh4BbFxF4RaSOCicTRbMYC8UO85uhArSSm/0EDDhX+kxIGJZ91F6Vv0vSS4qLy+55buZ8Jj4/P86t9YMxBeylQ/tUNGzhISqc1+CZeQ4aZKiRyQmlfkA6bcM42JAFQT/c0EbM2JmDsiSpkM8d021E9hqrr2eIhasaOo4vG5yUz7f9aSaRc/Muy02mckNxxxS7UshBCxr8veoMa0HYnB/rBNFeGAE=',
                         provider_name='anthropic',
                     ),
-                    BuiltinToolCallPart(
+                    ServerSideToolCallPart(
                         tool_name='code_execution',
                         args={
                             'code': """\
@@ -5368,7 +5362,7 @@ print(f"3 * 12390 = {result}")\
                         tool_call_id='srvtoolu_01Pc4vcD1JPUDcVhHaskFUfn',
                         provider_name='anthropic',
                     ),
-                    BuiltinToolReturnPart(
+                    ServerSideToolReturnPart(
                         tool_name='code_execution',
                         content={
                             'content': [],
@@ -5424,7 +5418,7 @@ print(f"3 * 12390 = {result}")\
                         signature='EucCCkYIBxgCKkDrAwZF3dM/a2UiJFMD/+Z5mdZOkFXxJ1vmAg7GWzC2YUTBKtKvys1yFaWmkUuBSYBC/kaTPYVj28qa94V0Q/ngEgw+4333itH5QH/0B6gaDHxUZy/HGNpU04RbZiIwmQeS7P+gLHlV9b0tRYciwVbpjZl8WkrunyWyD5xXTC7bzv/tQKv8kMjxRsRGZZH1Ks4BDiNK1tuAlz4x5LDAsui8/8vBDY1c+NRtc6y0bOgxSXFXSemv2BHm7VokC7JG8+iCQEY9HIyFtyjLeJ93niDCszU8YHPtAa4o2Orw8K4Tc4Y18U/TqfgnZulkjkeONhDJP9uUk4Db4woJiLpAx13X8W5TriwqHWMRM2+D0coqTTWTovC/xbVFFZZmwyqaz/h6V6qqokyLpbqb+5B5kw/uQfybUv28h3GqxFyuD62zM9OPyMqbd2GrAPbSLE2JETkJsp6GzxVEh1vNI3DMgdQYAQ==',
                         provider_name='anthropic',
                     ),
-                    BuiltinToolCallPart(
+                    ServerSideToolCallPart(
                         tool_name='code_execution',
                         args={
                             'code': """\
@@ -5435,7 +5429,7 @@ print(f"4 * 12390 = {result}")\
                         tool_call_id='srvtoolu_017iCje5DPMZEdgBkxj1osgt',
                         provider_name='anthropic',
                     ),
-                    BuiltinToolReturnPart(
+                    ServerSideToolReturnPart(
                         tool_name='code_execution',
                         content={
                             'content': [],
@@ -5475,7 +5469,7 @@ print(f"4 * 12390 = {result}")\
 async def test_anthropic_code_execution_tool_stream(allow_model_requests: None, anthropic_api_key: str):
     m = AnthropicModel('claude-sonnet-4-0', provider=AnthropicProvider(api_key=anthropic_api_key))
     settings = AnthropicModelSettings(anthropic_thinking={'type': 'enabled', 'budget_tokens': 3000})
-    agent = Agent(m, builtin_tools=[CodeExecutionTool()], model_settings=settings)
+    agent = Agent(m, server_side_tools=[CodeExecutionTool()], model_settings=settings)
 
     event_parts: list[Any] = []
     async with agent.iter(user_prompt='what is 65465-6544 * 65464-6+1.02255') as agent_run:
@@ -5519,13 +5513,13 @@ This is a computational task that requires precise calculations, so I should use
                     TextPart(
                         content="I'll calculate this mathematical expression for you. Let me break it down step by step following the order of operations."
                     ),
-                    BuiltinToolCallPart(
+                    ServerSideToolCallPart(
                         tool_name='code_execution',
                         args='{"code": "# Calculate the expression: 65465-6544 * 65464-6+1.02255\\n# Following order of operations (PEMDAS/BODMAS)\\n\\nexpression = \\"65465-6544 * 65464-6+1.02255\\"\\nprint(f\\"Expression: {expression}\\")\\n\\n# Let\'s break it down step by step\\nstep1 = 6544 * 65464  # Multiplication first\\nprint(f\\"Step 1 - Multiplication: 6544 * 65464 = {step1}\\")\\n\\nstep2 = 65465 - step1  # First subtraction\\nprint(f\\"Step 2 - First subtraction: 65465 - {step1} = {step2}\\")\\n\\nstep3 = step2 - 6  # Second subtraction\\nprint(f\\"Step 3 - Second subtraction: {step2} - 6 = {step3}\\")\\n\\nfinal_result = step3 + 1.02255  # Final addition\\nprint(f\\"Step 4 - Final addition: {step3} + 1.02255 = {final_result}\\")\\n\\n# Let\'s also verify with direct calculation\\ndirect_result = 65465-6544 * 65464-6+1.02255\\nprint(f\\"\\\\nDirect calculation: {direct_result}\\")\\nprint(f\\"Results match: {final_result == direct_result}\\")"}',
                         tool_call_id='srvtoolu_01MKwyo39KHRDr9Ubff5vWtG',
                         provider_name='anthropic',
                     ),
-                    BuiltinToolReturnPart(
+                    ServerSideToolReturnPart(
                         tool_name='code_execution',
                         content={
                             'content': [],
@@ -5728,11 +5722,11 @@ This is a computational task that requires precise calculations, so I should use
                 part=TextPart(
                     content="I'll calculate this mathematical expression for you. Let me break it down step by step following the order of operations."
                 ),
-                next_part_kind='builtin-tool-call',
+                next_part_kind='server-side-tool-call',
             ),
             PartStartEvent(
                 index=2,
-                part=BuiltinToolCallPart(
+                part=ServerSideToolCallPart(
                     tool_name='code_execution',
                     tool_call_id='srvtoolu_01MKwyo39KHRDr9Ubff5vWtG',
                     provider_name='anthropic',
@@ -5931,17 +5925,17 @@ This is a computational task that requires precise calculations, so I should use
             ),
             PartEndEvent(
                 index=2,
-                part=BuiltinToolCallPart(
+                part=ServerSideToolCallPart(
                     tool_name='code_execution',
                     args='{"code": "# Calculate the expression: 65465-6544 * 65464-6+1.02255\\n# Following order of operations (PEMDAS/BODMAS)\\n\\nexpression = \\"65465-6544 * 65464-6+1.02255\\"\\nprint(f\\"Expression: {expression}\\")\\n\\n# Let\'s break it down step by step\\nstep1 = 6544 * 65464  # Multiplication first\\nprint(f\\"Step 1 - Multiplication: 6544 * 65464 = {step1}\\")\\n\\nstep2 = 65465 - step1  # First subtraction\\nprint(f\\"Step 2 - First subtraction: 65465 - {step1} = {step2}\\")\\n\\nstep3 = step2 - 6  # Second subtraction\\nprint(f\\"Step 3 - Second subtraction: {step2} - 6 = {step3}\\")\\n\\nfinal_result = step3 + 1.02255  # Final addition\\nprint(f\\"Step 4 - Final addition: {step3} + 1.02255 = {final_result}\\")\\n\\n# Let\'s also verify with direct calculation\\ndirect_result = 65465-6544 * 65464-6+1.02255\\nprint(f\\"\\\\nDirect calculation: {direct_result}\\")\\nprint(f\\"Results match: {final_result == direct_result}\\")"}',
                     tool_call_id='srvtoolu_01MKwyo39KHRDr9Ubff5vWtG',
                     provider_name='anthropic',
                 ),
-                next_part_kind='builtin-tool-return',
+                next_part_kind='server-side-tool-return',
             ),
             PartStartEvent(
                 index=3,
-                part=BuiltinToolReturnPart(
+                part=ServerSideToolReturnPart(
                     tool_name='code_execution',
                     content={
                         'content': [],
@@ -5963,9 +5957,11 @@ Results match: True
                     timestamp=IsDatetime(),
                     provider_name='anthropic',
                 ),
-                previous_part_kind='builtin-tool-call',
+                previous_part_kind='server-side-tool-call',
             ),
-            PartStartEvent(index=4, part=TextPart(content='The answer to'), previous_part_kind='builtin-tool-return'),
+            PartStartEvent(
+                index=4, part=TextPart(content='The answer to'), previous_part_kind='server-side-tool-return'
+            ),
             PartDeltaEvent(index=4, delta=TextPartDelta(content_delta=' **65465-6544 * ')),
             PartDeltaEvent(index=4, delta=TextPartDelta(content_delta='65464-6+1.02255** is **')),
             PartDeltaEvent(index=4, delta=TextPartDelta(content_delta='-428,330,955.97745**.')),
@@ -6026,16 +6022,16 @@ Here's how it breaks down following the order of operations:
 """
                 ),
             ),
-            BuiltinToolCallEvent(  # pyright: ignore[reportDeprecated]
-                part=BuiltinToolCallPart(
+            ServerSideToolCallEvent(
+                part=ServerSideToolCallPart(
                     tool_name='code_execution',
                     args='{"code": "# Calculate the expression: 65465-6544 * 65464-6+1.02255\\n# Following order of operations (PEMDAS/BODMAS)\\n\\nexpression = \\"65465-6544 * 65464-6+1.02255\\"\\nprint(f\\"Expression: {expression}\\")\\n\\n# Let\'s break it down step by step\\nstep1 = 6544 * 65464  # Multiplication first\\nprint(f\\"Step 1 - Multiplication: 6544 * 65464 = {step1}\\")\\n\\nstep2 = 65465 - step1  # First subtraction\\nprint(f\\"Step 2 - First subtraction: 65465 - {step1} = {step2}\\")\\n\\nstep3 = step2 - 6  # Second subtraction\\nprint(f\\"Step 3 - Second subtraction: {step2} - 6 = {step3}\\")\\n\\nfinal_result = step3 + 1.02255  # Final addition\\nprint(f\\"Step 4 - Final addition: {step3} + 1.02255 = {final_result}\\")\\n\\n# Let\'s also verify with direct calculation\\ndirect_result = 65465-6544 * 65464-6+1.02255\\nprint(f\\"\\\\nDirect calculation: {direct_result}\\")\\nprint(f\\"Results match: {final_result == direct_result}\\")"}',
                     tool_call_id='srvtoolu_01MKwyo39KHRDr9Ubff5vWtG',
                     provider_name='anthropic',
                 )
             ),
-            BuiltinToolResultEvent(  # pyright: ignore[reportDeprecated]
-                result=BuiltinToolReturnPart(
+            ServerSideToolResultEvent(
+                result=ServerSideToolReturnPart(
                     tool_name='code_execution',
                     content={
                         'content': [],
@@ -6070,7 +6066,7 @@ async def test_anthropic_server_tool_pass_history_to_another_provider(
 
     openai_model = OpenAIResponsesModel('gpt-4.1', provider=OpenAIProvider(api_key=openai_api_key))
     anthropic_model = AnthropicModel('claude-sonnet-4-5', provider=AnthropicProvider(api_key=anthropic_api_key))
-    agent = Agent(anthropic_model, builtin_tools=[WebSearchTool()])
+    agent = Agent(anthropic_model, server_side_tools=[WebSearchTool()])
 
     result = await agent.run('What day is today?')
     assert result.output == snapshot('Today is November 19, 2025.')
@@ -6109,20 +6105,20 @@ async def test_anthropic_server_tool_receive_history_from_another_provider(
 
     google_model = GoogleModel('gemini-2.0-flash', provider=GoogleProvider(api_key=gemini_api_key))
     anthropic_model = AnthropicModel('claude-sonnet-4-0', provider=AnthropicProvider(api_key=anthropic_api_key))
-    agent = Agent(builtin_tools=[CodeExecutionTool()])
+    agent = Agent(server_side_tools=[CodeExecutionTool()])
 
     result = await agent.run('How much is 3 * 12390?', model=google_model)
     assert part_types_from_messages(result.all_messages()) == snapshot(
-        [[UserPromptPart], [BuiltinToolCallPart, BuiltinToolReturnPart, TextPart]]
+        [[UserPromptPart], [ServerSideToolCallPart, ServerSideToolReturnPart, TextPart]]
     )
 
     result = await agent.run('Multiplied by 12390', model=anthropic_model, message_history=result.all_messages())
     assert part_types_from_messages(result.all_messages()) == snapshot(
         [
             [UserPromptPart],
-            [BuiltinToolCallPart, BuiltinToolReturnPart, TextPart],
+            [ServerSideToolCallPart, ServerSideToolReturnPart, TextPart],
             [UserPromptPart],
-            [BuiltinToolCallPart, BuiltinToolReturnPart, TextPart],
+            [ServerSideToolCallPart, ServerSideToolReturnPart, TextPart],
         ]
     )
 
@@ -6594,14 +6590,14 @@ async def test_anthropic_web_search_tool_pass_history_back(env: TestEnv, allow_m
 
     mock_client = MockAnthropic.create_mock([first_response, second_response])
     m = AnthropicModel('claude-sonnet-4-5', provider=AnthropicProvider(anthropic_client=mock_client))
-    agent = Agent(m, builtin_tools=[WebSearchTool()])
+    agent = Agent(m, server_side_tools=[WebSearchTool()])
 
     # First run to get server tool history
     result = await agent.run('What day is today?')
 
     # Verify we have server tool parts in the history
-    server_tool_calls = [p for m in result.all_messages() for p in m.parts if isinstance(p, BuiltinToolCallPart)]
-    server_tool_returns = [p for m in result.all_messages() for p in m.parts if isinstance(p, BuiltinToolReturnPart)]
+    server_tool_calls = [p for m in result.all_messages() for p in m.parts if isinstance(p, ServerSideToolCallPart)]
+    server_tool_returns = [p for m in result.all_messages() for p in m.parts if isinstance(p, ServerSideToolReturnPart)]
     assert len(server_tool_calls) == 1
     assert len(server_tool_returns) == 1
     assert server_tool_calls[0].tool_name == 'web_search'
@@ -6654,14 +6650,14 @@ async def test_anthropic_code_execution_tool_pass_history_back(env: TestEnv, all
 
     mock_client = MockAnthropic.create_mock([first_response, second_response])
     m = AnthropicModel('claude-sonnet-4-5', provider=AnthropicProvider(anthropic_client=mock_client))
-    agent = Agent(m, builtin_tools=[CodeExecutionTool()])
+    agent = Agent(m, server_side_tools=[CodeExecutionTool()])
 
     # First run to get server tool history
     result = await agent.run('What is 2 + 2?')
 
     # Verify we have server tool parts in the history
-    server_tool_calls = [p for m in result.all_messages() for p in m.parts if isinstance(p, BuiltinToolCallPart)]
-    server_tool_returns = [p for m in result.all_messages() for p in m.parts if isinstance(p, BuiltinToolReturnPart)]
+    server_tool_calls = [p for m in result.all_messages() for p in m.parts if isinstance(p, ServerSideToolCallPart)]
+    server_tool_returns = [p for m in result.all_messages() for p in m.parts if isinstance(p, ServerSideToolReturnPart)]
     assert len(server_tool_calls) == 1
     assert len(server_tool_returns) == 1
     assert server_tool_calls[0].tool_name == 'code_execution'
@@ -6675,7 +6671,7 @@ async def test_anthropic_code_execution_tool_pass_history_back(env: TestEnv, all
 
 async def test_anthropic_web_search_tool_stream(allow_model_requests: None, anthropic_api_key: str):
     m = AnthropicModel('claude-sonnet-4-0', provider=AnthropicProvider(api_key=anthropic_api_key))
-    agent = Agent(m, instructions='You are a helpful assistant.', builtin_tools=[WebSearchTool()])
+    agent = Agent(m, instructions='You are a helpful assistant.', server_side_tools=[WebSearchTool()])
 
     event_parts: list[Any] = []
     async with agent.iter(user_prompt='Give me the top 3 news in the world today.') as agent_run:
@@ -6689,7 +6685,7 @@ async def test_anthropic_web_search_tool_stream(allow_model_requests: None, anth
         [
             PartStartEvent(
                 index=0,
-                part=BuiltinToolCallPart(
+                part=ServerSideToolCallPart(
                     tool_name='web_search', tool_call_id='srvtoolu_01NcU4XNwyxWK6a9tcJZ8wGY', provider_name='anthropic'
                 ),
             ),
@@ -6718,17 +6714,17 @@ async def test_anthropic_web_search_tool_stream(allow_model_requests: None, anth
             ),
             PartEndEvent(
                 index=0,
-                part=BuiltinToolCallPart(
+                part=ServerSideToolCallPart(
                     tool_name='web_search',
                     args='{"query": "top world news today"}',
                     tool_call_id='srvtoolu_01NcU4XNwyxWK6a9tcJZ8wGY',
                     provider_name='anthropic',
                 ),
-                next_part_kind='builtin-tool-return',
+                next_part_kind='server-side-tool-return',
             ),
             PartStartEvent(
                 index=1,
-                part=BuiltinToolReturnPart(
+                part=ServerSideToolReturnPart(
                     tool_name='web_search',
                     content=[
                         {
@@ -6806,12 +6802,12 @@ async def test_anthropic_web_search_tool_stream(allow_model_requests: None, anth
                     timestamp=IsDatetime(),
                     provider_name='anthropic',
                 ),
-                previous_part_kind='builtin-tool-call',
+                previous_part_kind='server-side-tool-call',
             ),
             PartStartEvent(
                 index=2,
                 part=TextPart(content='Let me search for more specific breaking'),
-                previous_part_kind='builtin-tool-return',
+                previous_part_kind='server-side-tool-return',
             ),
             FinalResultEvent(tool_name=None, tool_call_id=None),
             PartDeltaEvent(index=2, delta=TextPartDelta(content_delta=' news stories to get clearer headlines.')),
@@ -6820,11 +6816,11 @@ async def test_anthropic_web_search_tool_stream(allow_model_requests: None, anth
                 part=TextPart(
                     content='Let me search for more specific breaking news stories to get clearer headlines.'
                 ),
-                next_part_kind='builtin-tool-call',
+                next_part_kind='server-side-tool-call',
             ),
             PartStartEvent(
                 index=3,
-                part=BuiltinToolCallPart(
+                part=ServerSideToolCallPart(
                     tool_name='web_search', tool_call_id='srvtoolu_01WiP3ZfXZXSykVQEL78XJ4T', provider_name='anthropic'
                 ),
                 previous_part_kind='text',
@@ -6858,17 +6854,17 @@ async def test_anthropic_web_search_tool_stream(allow_model_requests: None, anth
             ),
             PartEndEvent(
                 index=3,
-                part=BuiltinToolCallPart(
+                part=ServerSideToolCallPart(
                     tool_name='web_search',
                     args='{"query": "breaking news headlines August 14 2025"}',
                     tool_call_id='srvtoolu_01WiP3ZfXZXSykVQEL78XJ4T',
                     provider_name='anthropic',
                 ),
-                next_part_kind='builtin-tool-return',
+                next_part_kind='server-side-tool-return',
             ),
             PartStartEvent(
                 index=4,
-                part=BuiltinToolReturnPart(
+                part=ServerSideToolReturnPart(
                     tool_name='web_search',
                     content=[
                         {
@@ -6946,9 +6942,9 @@ async def test_anthropic_web_search_tool_stream(allow_model_requests: None, anth
                     timestamp=IsDatetime(),
                     provider_name='anthropic',
                 ),
-                previous_part_kind='builtin-tool-call',
+                previous_part_kind='server-side-tool-call',
             ),
-            PartStartEvent(index=5, part=TextPart(content='Base'), previous_part_kind='builtin-tool-return'),
+            PartStartEvent(index=5, part=TextPart(content='Base'), previous_part_kind='server-side-tool-return'),
             PartDeltaEvent(
                 index=5, delta=TextPartDelta(content_delta='d on the search results, I can identify the top')
             ),
@@ -7201,16 +7197,16 @@ These stories represent major international diplomatic developments, significant
 """
                 ),
             ),
-            BuiltinToolCallEvent(  # pyright: ignore[reportDeprecated]
-                part=BuiltinToolCallPart(
+            ServerSideToolCallEvent(
+                part=ServerSideToolCallPart(
                     tool_name='web_search',
                     args='{"query": "top world news today"}',
                     tool_call_id='srvtoolu_01NcU4XNwyxWK6a9tcJZ8wGY',
                     provider_name='anthropic',
                 )
             ),
-            BuiltinToolResultEvent(  # pyright: ignore[reportDeprecated]
-                result=BuiltinToolReturnPart(
+            ServerSideToolResultEvent(
+                result=ServerSideToolReturnPart(
                     tool_name='web_search',
                     content=[
                         {
@@ -7289,16 +7285,16 @@ These stories represent major international diplomatic developments, significant
                     provider_name='anthropic',
                 )
             ),
-            BuiltinToolCallEvent(  # pyright: ignore[reportDeprecated]
-                part=BuiltinToolCallPart(
+            ServerSideToolCallEvent(
+                part=ServerSideToolCallPart(
                     tool_name='web_search',
                     args='{"query": "breaking news headlines August 14 2025"}',
                     tool_call_id='srvtoolu_01WiP3ZfXZXSykVQEL78XJ4T',
                     provider_name='anthropic',
                 )
             ),
-            BuiltinToolResultEvent(  # pyright: ignore[reportDeprecated]
-                result=BuiltinToolReturnPart(
+            ServerSideToolResultEvent(
+                result=ServerSideToolReturnPart(
                     tool_name='web_search',
                     content=[
                         {
@@ -7385,7 +7381,7 @@ async def test_anthropic_text_parts_ahead_of_built_in_tool_call(allow_model_requ
     # Verify that text parts ahead of the built-in tool call are not included in the output
 
     anthropic_model = AnthropicModel('claude-sonnet-4-5', provider=AnthropicProvider(api_key=anthropic_api_key))
-    agent = Agent(anthropic_model, builtin_tools=[WebSearchTool()], instructions='Be very concise.')
+    agent = Agent(anthropic_model, server_side_tools=[WebSearchTool()], instructions='Be very concise.')
 
     result = await agent.run('Briefly mention 1 event that happened today in history?')
     assert result.output == snapshot("""\
@@ -7402,32 +7398,32 @@ In 1939, Finnish runner Taisto Mäki made history by becoming the first person t
                 'Let me search for a significant',
                 'Let me search for a significant historical event that occurred on',
                 'Let me search for a significant historical event that occurred on September 18th.',
-                '',
-                '',
-                '',
-                '',
-                '',
-                '',
-                '',
-                '',
-                '',
-                '',
-                '',
-                '',
-                'Here',
-                "Here's one notable historical event that occurred on September",
-                "Here's one notable historical event that occurred on September 18th: ",
-                "Here's one notable historical event that occurred on September 18th: On September 18, 1793, President George Washington marke",
-                "Here's one notable historical event that occurred on September 18th: On September 18, 1793, President George Washington marked the location for the Capitol Building",
-                "Here's one notable historical event that occurred on September 18th: On September 18, 1793, President George Washington marked the location for the Capitol Building in Washington DC, and he",
-                "Here's one notable historical event that occurred on September 18th: On September 18, 1793, President George Washington marked the location for the Capitol Building in Washington DC, and he would return periodically to oversee its",
-                "Here's one notable historical event that occurred on September 18th: On September 18, 1793, President George Washington marked the location for the Capitol Building in Washington DC, and he would return periodically to oversee its construction personally",
-                "Here's one notable historical event that occurred on September 18th: On September 18, 1793, President George Washington marked the location for the Capitol Building in Washington DC, and he would return periodically to oversee its construction personally.",
+                'Let me search for a significant historical event that occurred on September 18th.',
+                'Let me search for a significant historical event that occurred on September 18th.',
+                'Let me search for a significant historical event that occurred on September 18th.',
+                'Let me search for a significant historical event that occurred on September 18th.',
+                'Let me search for a significant historical event that occurred on September 18th.',
+                'Let me search for a significant historical event that occurred on September 18th.',
+                'Let me search for a significant historical event that occurred on September 18th.',
+                'Let me search for a significant historical event that occurred on September 18th.',
+                'Let me search for a significant historical event that occurred on September 18th.',
+                'Let me search for a significant historical event that occurred on September 18th.',
+                'Let me search for a significant historical event that occurred on September 18th.',
+                'Let me search for a significant historical event that occurred on September 18th.',
+                'Let me search for a significant historical event that occurred on September 18th.Here',
+                "Let me search for a significant historical event that occurred on September 18th.Here's one notable historical event that occurred on September",
+                "Let me search for a significant historical event that occurred on September 18th.Here's one notable historical event that occurred on September 18th: ",
+                "Let me search for a significant historical event that occurred on September 18th.Here's one notable historical event that occurred on September 18th: On September 18, 1793, President George Washington marke",
+                "Let me search for a significant historical event that occurred on September 18th.Here's one notable historical event that occurred on September 18th: On September 18, 1793, President George Washington marked the location for the Capitol Building",
+                "Let me search for a significant historical event that occurred on September 18th.Here's one notable historical event that occurred on September 18th: On September 18, 1793, President George Washington marked the location for the Capitol Building in Washington DC, and he",
+                "Let me search for a significant historical event that occurred on September 18th.Here's one notable historical event that occurred on September 18th: On September 18, 1793, President George Washington marked the location for the Capitol Building in Washington DC, and he would return periodically to oversee its",
+                "Let me search for a significant historical event that occurred on September 18th.Here's one notable historical event that occurred on September 18th: On September 18, 1793, President George Washington marked the location for the Capitol Building in Washington DC, and he would return periodically to oversee its construction personally",
+                "Let me search for a significant historical event that occurred on September 18th.Here's one notable historical event that occurred on September 18th: On September 18, 1793, President George Washington marked the location for the Capitol Building in Washington DC, and he would return periodically to oversee its construction personally.",
             ]
         )
 
     assert await result.get_output() == snapshot(
-        "Here's one notable historical event that occurred on September 18th: On September 18, 1793, President George Washington marked the location for the Capitol Building in Washington DC, and he would return periodically to oversee its construction personally."
+        "Let me search for a significant historical event that occurred on September 18th.Here's one notable historical event that occurred on September 18th: On September 18, 1793, President George Washington marked the location for the Capitol Building in Washington DC, and he would return periodically to oversee its construction personally."
     )
 
     async with agent.run_stream('Briefly mention 1 event that happened yesterday in history?') as result:
@@ -7441,85 +7437,25 @@ In 1939, Finnish runner Taisto Mäki made history by becoming the first person t
                 "Let me search for a historical event that occurred on September 16th (yesterday's date since today is September 17,",
                 "Let me search for a historical event that occurred on September 16th (yesterday's date since today is September 17, 2025",
                 "Let me search for a historical event that occurred on September 16th (yesterday's date since today is September 17, 2025).",
-                """\
-Let me search for a historical event that occurred on September 16th (yesterday's date since today is September 17, 2025).
-
-""",
-                """\
-Let me search for a historical event that occurred on September 16th (yesterday's date since today is September 17, 2025).
-
-Base\
-""",
-                """\
-Let me search for a historical event that occurred on September 16th (yesterday's date since today is September 17, 2025).
-
-Based on yesterday's date (\
-""",
-                """\
-Let me search for a historical event that occurred on September 16th (yesterday's date since today is September 17, 2025).
-
-Based on yesterday's date (September 16, 2025\
-""",
-                """\
-Let me search for a historical event that occurred on September 16th (yesterday's date since today is September 17, 2025).
-
-Based on yesterday's date (September 16, 2025), \
-""",
-                """\
-Let me search for a historical event that occurred on September 16th (yesterday's date since today is September 17, 2025).
-
-Based on yesterday's date (September 16, 2025), Asian markets rose higher as Federal Reserve rate cut hopes\
-""",
-                """\
-Let me search for a historical event that occurred on September 16th (yesterday's date since today is September 17, 2025).
-
-Based on yesterday's date (September 16, 2025), Asian markets rose higher as Federal Reserve rate cut hopes lifted global market sentiment\
-""",
-                """\
-Let me search for a historical event that occurred on September 16th (yesterday's date since today is September 17, 2025).
-
-Based on yesterday's date (September 16, 2025), Asian markets rose higher as Federal Reserve rate cut hopes lifted global market sentiment. Additionally, \
-""",
-                """\
-Let me search for a historical event that occurred on September 16th (yesterday's date since today is September 17, 2025).
-
-Based on yesterday's date (September 16, 2025), Asian markets rose higher as Federal Reserve rate cut hopes lifted global market sentiment. Additionally, there were severe rain and gales\
-""",
-                """\
-Let me search for a historical event that occurred on September 16th (yesterday's date since today is September 17, 2025).
-
-Based on yesterday's date (September 16, 2025), Asian markets rose higher as Federal Reserve rate cut hopes lifted global market sentiment. Additionally, there were severe rain and gales impacting parts\
-""",
-                """\
-Let me search for a historical event that occurred on September 16th (yesterday's date since today is September 17, 2025).
-
-Based on yesterday's date (September 16, 2025), Asian markets rose higher as Federal Reserve rate cut hopes lifted global market sentiment. Additionally, there were severe rain and gales impacting parts of New Zealand, an\
-""",
-                """\
-Let me search for a historical event that occurred on September 16th (yesterday's date since today is September 17, 2025).
-
-Based on yesterday's date (September 16, 2025), Asian markets rose higher as Federal Reserve rate cut hopes lifted global market sentiment. Additionally, there were severe rain and gales impacting parts of New Zealand, and a notable court case involving\
-""",
-                """\
-Let me search for a historical event that occurred on September 16th (yesterday's date since today is September 17, 2025).
-
-Based on yesterday's date (September 16, 2025), Asian markets rose higher as Federal Reserve rate cut hopes lifted global market sentiment. Additionally, there were severe rain and gales impacting parts of New Zealand, and a notable court case involving a British aristoc\
-""",
-                """\
-Let me search for a historical event that occurred on September 16th (yesterday's date since today is September 17, 2025).
-
-Based on yesterday's date (September 16, 2025), Asian markets rose higher as Federal Reserve rate cut hopes lifted global market sentiment. Additionally, there were severe rain and gales impacting parts of New Zealand, and a notable court case involving a British aristocrat\
-""",
-                """\
-Let me search for a historical event that occurred on September 16th (yesterday's date since today is September 17, 2025).
-
-Based on yesterday's date (September 16, 2025), Asian markets rose higher as Federal Reserve rate cut hopes lifted global market sentiment. Additionally, there were severe rain and gales impacting parts of New Zealand, and a notable court case involving a British aristocrat.\
-""",
+                "Let me search for a historical event that occurred on September 16th (yesterday's date since today is September 17, 2025).Base",
+                "Let me search for a historical event that occurred on September 16th (yesterday's date since today is September 17, 2025).Based on yesterday's date (",
+                "Let me search for a historical event that occurred on September 16th (yesterday's date since today is September 17, 2025).Based on yesterday's date (September 16, 2025",
+                "Let me search for a historical event that occurred on September 16th (yesterday's date since today is September 17, 2025).Based on yesterday's date (September 16, 2025), ",
+                "Let me search for a historical event that occurred on September 16th (yesterday's date since today is September 17, 2025).Based on yesterday's date (September 16, 2025), Asian markets rose higher as Federal Reserve rate cut hopes",
+                "Let me search for a historical event that occurred on September 16th (yesterday's date since today is September 17, 2025).Based on yesterday's date (September 16, 2025), Asian markets rose higher as Federal Reserve rate cut hopes lifted global market sentiment",
+                "Let me search for a historical event that occurred on September 16th (yesterday's date since today is September 17, 2025).Based on yesterday's date (September 16, 2025), Asian markets rose higher as Federal Reserve rate cut hopes lifted global market sentiment. Additionally, ",
+                "Let me search for a historical event that occurred on September 16th (yesterday's date since today is September 17, 2025).Based on yesterday's date (September 16, 2025), Asian markets rose higher as Federal Reserve rate cut hopes lifted global market sentiment. Additionally, there were severe rain and gales",
+                "Let me search for a historical event that occurred on September 16th (yesterday's date since today is September 17, 2025).Based on yesterday's date (September 16, 2025), Asian markets rose higher as Federal Reserve rate cut hopes lifted global market sentiment. Additionally, there were severe rain and gales impacting parts",
+                "Let me search for a historical event that occurred on September 16th (yesterday's date since today is September 17, 2025).Based on yesterday's date (September 16, 2025), Asian markets rose higher as Federal Reserve rate cut hopes lifted global market sentiment. Additionally, there were severe rain and gales impacting parts of New Zealand, an",
+                "Let me search for a historical event that occurred on September 16th (yesterday's date since today is September 17, 2025).Based on yesterday's date (September 16, 2025), Asian markets rose higher as Federal Reserve rate cut hopes lifted global market sentiment. Additionally, there were severe rain and gales impacting parts of New Zealand, and a notable court case involving",
+                "Let me search for a historical event that occurred on September 16th (yesterday's date since today is September 17, 2025).Based on yesterday's date (September 16, 2025), Asian markets rose higher as Federal Reserve rate cut hopes lifted global market sentiment. Additionally, there were severe rain and gales impacting parts of New Zealand, and a notable court case involving a British aristoc",
+                "Let me search for a historical event that occurred on September 16th (yesterday's date since today is September 17, 2025).Based on yesterday's date (September 16, 2025), Asian markets rose higher as Federal Reserve rate cut hopes lifted global market sentiment. Additionally, there were severe rain and gales impacting parts of New Zealand, and a notable court case involving a British aristocrat",
+                "Let me search for a historical event that occurred on September 16th (yesterday's date since today is September 17, 2025).Based on yesterday's date (September 16, 2025), Asian markets rose higher as Federal Reserve rate cut hopes lifted global market sentiment. Additionally, there were severe rain and gales impacting parts of New Zealand, and a notable court case involving a British aristocrat.",
             ]
         )
 
     assert await result.get_output() == snapshot(
-        "Based on yesterday's date (September 16, 2025), Asian markets rose higher as Federal Reserve rate cut hopes lifted global market sentiment. Additionally, there were severe rain and gales impacting parts of New Zealand, and a notable court case involving a British aristocrat."
+        "Let me search for a historical event that occurred on September 16th (yesterday's date since today is September 17, 2025).Based on yesterday's date (September 16, 2025), Asian markets rose higher as Federal Reserve rate cut hopes lifted global market sentiment. Additionally, there were severe rain and gales impacting parts of New Zealand, and a notable court case involving a British aristocrat."
     )
 
     async with agent.run_stream(
@@ -7532,10 +7468,6 @@ Based on yesterday's date (September 16, 2025), Asian markets rose higher as Fed
                 ' me search for historical',
                 ' events that occurred on',
                 ' September 19th.',
-                """\
-
-
-""",
                 'Here',
                 "'s one significant historical event that occurred on September",
                 ' 19th: ',
@@ -7548,7 +7480,7 @@ Based on yesterday's date (September 16, 2025), Asian markets rose higher as Fed
         )
 
     assert await result.get_output() == snapshot(
-        "Here's one significant historical event that occurred on September 19th: New Zealand made history by becoming the first self-governing nation to grant women the right to vote in national elections. It would take 27 more years before American women gained the same right."
+        "Let me search for historical events that occurred on September 19th.Here's one significant historical event that occurred on September 19th: New Zealand made history by becoming the first self-governing nation to grant women the right to vote in national elections. It would take 27 more years before American women gained the same right."
     )
 
 
@@ -7558,7 +7490,7 @@ async def test_anthropic_memory_tool(allow_model_requests: None, anthropic_api_k
         provider=AnthropicProvider(api_key=anthropic_api_key),
         settings=AnthropicModelSettings(extra_headers={'anthropic-beta': 'context-1m-2025-08-07'}),
     )
-    agent = Agent(anthropic_model, builtin_tools=[MemoryTool()])
+    agent = Agent(anthropic_model, server_side_tools=[MemoryTool()])
 
     with pytest.raises(UserError, match="Built-in `MemoryTool` requires a 'memory' tool to be defined."):
         await agent.run('Where do I live?')

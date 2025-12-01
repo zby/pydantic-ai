@@ -175,8 +175,8 @@ class CohereModel(Model):
     ) -> V2ChatResponse:
         tools = self._get_tools(model_request_parameters)
 
-        if model_request_parameters.builtin_tools:
-            raise UserError('Cohere does not support built-in tools')
+        if model_request_parameters.server_side_tools:
+            raise UserError('Cohere does not support server-side tools')
 
         cohere_messages = self._map_messages(messages, model_request_parameters)
         try:

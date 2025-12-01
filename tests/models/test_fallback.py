@@ -155,7 +155,7 @@ def test_first_failed_instrumented(capfire: CaptureLogfire) -> None:
                     'gen_ai.operation.name': 'chat',
                     'model_request_parameters': {
                         'function_tools': [],
-                        'builtin_tools': [],
+                        'server_side_tools': [],
                         'output_mode': 'text',
                         'output_object': None,
                         'output_tools': [],
@@ -264,7 +264,7 @@ async def test_first_failed_instrumented_stream(capfire: CaptureLogfire) -> None
                     'gen_ai.operation.name': 'chat',
                     'model_request_parameters': {
                         'function_tools': [],
-                        'builtin_tools': [],
+                        'server_side_tools': [],
                         'output_mode': 'text',
                         'output_object': None,
                         'output_tools': [],
@@ -374,7 +374,7 @@ def test_all_failed_instrumented(capfire: CaptureLogfire) -> None:
                     'gen_ai.request.model': 'fallback:function:failure_response:,function:failure_response:',
                     'model_request_parameters': {
                         'function_tools': [],
-                        'builtin_tools': [],
+                        'server_side_tools': [],
                         'output_mode': 'text',
                         'output_object': None,
                         'output_tools': [],
@@ -839,7 +839,7 @@ Don't include any text or Markdown fencing before or after.
                     'gen_ai.operation.name': 'chat',
                     'model_request_parameters': {
                         'function_tools': [],
-                        'builtin_tools': [],
+                        'server_side_tools': [],
                         'output_mode': 'prompted',
                         'output_object': {
                             'json_schema': {

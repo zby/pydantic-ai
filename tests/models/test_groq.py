@@ -18,8 +18,8 @@ from typing_extensions import TypedDict
 from pydantic_ai import (
     Agent,
     BinaryContent,
-    BuiltinToolCallPart,
-    BuiltinToolReturnPart,
+    ServerSideToolCallPart,
+    ServerSideToolReturnPart,
     FinalResultEvent,
     ImageUrl,
     ModelAPIError,
@@ -40,10 +40,10 @@ from pydantic_ai import (
     ToolReturnPart,
     UserPromptPart,
 )
-from pydantic_ai.builtin_tools import WebSearchTool
+from pydantic_ai.server_side_tools import WebSearchTool
 from pydantic_ai.messages import (
-    BuiltinToolCallEvent,  # pyright: ignore[reportDeprecated]
-    BuiltinToolResultEvent,  # pyright: ignore[reportDeprecated]
+    ServerSideToolCallEvent,
+    ServerSideToolResultEvent,
 )
 from pydantic_ai.output import NativeOutput, PromptedOutput
 from pydantic_ai.usage import RequestUsage, RunUsage
@@ -75,12 +75,6 @@ pytestmark = [
     pytest.mark.skipif(not imports_successful(), reason='groq not installed'),
     pytest.mark.anyio,
     pytest.mark.vcr,
-    pytest.mark.filterwarnings(
-        'ignore:`BuiltinToolCallEvent` is deprecated, look for `PartStartEvent` and `PartDeltaEvent` with `BuiltinToolCallPart` instead.:DeprecationWarning'
-    ),
-    pytest.mark.filterwarnings(
-        'ignore:`BuiltinToolResultEvent` is deprecated, look for `PartStartEvent` and `PartDeltaEvent` with `BuiltinToolReturnPart` instead.:DeprecationWarning'
-    ),
 ]
 
 
@@ -753,7 +747,7 @@ async def test_groq_model_instructions(allow_model_requests: None, groq_api_key:
 
 async def test_groq_model_web_search_tool(allow_model_requests: None, groq_api_key: str):
     m = GroqModel('compound-beta', provider=GroqProvider(api_key=groq_api_key))
-    agent = Agent(m, builtin_tools=[WebSearchTool()])
+    agent = Agent(m, server_side_tools=[WebSearchTool()])
 
     result = await agent.run('What is the weather in San Francisco today?')
     assert result.output == snapshot("""\
@@ -877,13 +871,13 @@ Based on the search results, the current weather in San Francisco is partly clou
 The weather in San Francisco today is partly cloudy with a high of 17°C (62.6°F).\
 """
                     ),
-                    BuiltinToolCallPart(
+                    ServerSideToolCallPart(
                         tool_name='web_search',
                         args={'query': 'What is the weather in San Francisco today?'},
                         tool_call_id=IsStr(),
                         provider_name='groq',
                     ),
-                    BuiltinToolReturnPart(
+                    ServerSideToolReturnPart(
                         tool_name='web_search',
                         content={
                             'images': None,
@@ -1021,7 +1015,7 @@ It's worth noting that the weather in San Francisco can be quite variable, and t
 
 async def test_groq_model_web_search_tool_stream(allow_model_requests: None, groq_api_key: str):
     m = GroqModel('compound-beta', provider=GroqProvider(api_key=groq_api_key))
-    agent = Agent(m, builtin_tools=[WebSearchTool()])
+    agent = Agent(m, server_side_tools=[WebSearchTool()])
 
     event_parts: list[Any] = []
     async with agent.iter(user_prompt='What is the weather in San Francisco today?') as agent_run:
@@ -1055,13 +1049,13 @@ To find the current weather in San Francisco, I will use the search tool to look
 search(What is the weather in San Francisco today?)
 """
                     ),
-                    BuiltinToolCallPart(
+                    ServerSideToolCallPart(
                         tool_name='web_search',
                         args={'query': 'What is the weather in San Francisco today?'},
                         tool_call_id=IsStr(),
                         provider_name='groq',
                     ),
-                    BuiltinToolReturnPart(
+                    ServerSideToolReturnPart(
                         tool_name='web_search',
                         content={
                             'images': None,
@@ -1244,11 +1238,11 @@ To find the current weather in San Francisco, I will use the search tool to look
 search(What is the weather in San Francisco today?)
 """
                 ),
-                next_part_kind='builtin-tool-call',
+                next_part_kind='server-side-tool-call',
             ),
             PartStartEvent(
                 index=1,
-                part=BuiltinToolCallPart(
+                part=ServerSideToolCallPart(
                     tool_name='web_search',
                     args={'query': 'What is the weather in San Francisco today?'},
                     tool_call_id=IsStr(),
@@ -1258,17 +1252,17 @@ search(What is the weather in San Francisco today?)
             ),
             PartEndEvent(
                 index=1,
-                part=BuiltinToolCallPart(
+                part=ServerSideToolCallPart(
                     tool_name='web_search',
                     args={'query': 'What is the weather in San Francisco today?'},
                     tool_call_id=IsStr(),
                     provider_name='groq',
                 ),
-                next_part_kind='builtin-tool-return',
+                next_part_kind='server-side-tool-return',
             ),
             PartStartEvent(
                 index=2,
-                part=BuiltinToolReturnPart(
+                part=ServerSideToolReturnPart(
                     tool_name='web_search',
                     content={
                         'images': None,
@@ -1375,7 +1369,7 @@ search(What is the weather in San Francisco today?)
                     timestamp=IsDatetime(),
                     provider_name='groq',
                 ),
-                previous_part_kind='builtin-tool-call',
+                previous_part_kind='server-side-tool-call',
             ),
             PartStartEvent(
                 index=3,
@@ -1465,7 +1459,7 @@ Score: 0.2700
 </output>
 """
                 ),
-                previous_part_kind='builtin-tool-return',
+                previous_part_kind='server-side-tool-return',
             ),
             PartDeltaEvent(index=3, delta=ThinkingPartDelta(content_delta='</')),
             PartDeltaEvent(index=3, delta=ThinkingPartDelta(content_delta='think')),
@@ -1802,16 +1796,16 @@ The weather in San Francisco today is partly cloudy with a temperature of 61°F 
                     content='The weather in San Francisco today is partly cloudy with a temperature of 61°F (17°C) and high humidity. The current conditions include a wind speed of around 7-22 km/h and a humidity level of 90-94%.'
                 ),
             ),
-            BuiltinToolCallEvent(  # pyright: ignore[reportDeprecated]
-                part=BuiltinToolCallPart(
+            ServerSideToolCallEvent(
+                part=ServerSideToolCallPart(
                     tool_name='web_search',
                     args={'query': 'What is the weather in San Francisco today?'},
                     tool_call_id=IsStr(),
                     provider_name='groq',
                 )
             ),
-            BuiltinToolResultEvent(  # pyright: ignore[reportDeprecated]
-                result=BuiltinToolReturnPart(
+            ServerSideToolResultEvent(
+                result=ServerSideToolReturnPart(
                     tool_name='web_search',
                     content={
                         'images': None,

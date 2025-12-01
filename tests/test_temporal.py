@@ -2138,7 +2138,7 @@ web_search_model = OpenAIResponsesModel(
 web_search_agent = Agent(
     web_search_model,
     name='web_search_agent',
-    builtin_tools=[WebSearchTool(user_location=WebSearchUserLocation(city='Mexico City', country='MX'))],
+    server_side_tools=[WebSearchTool(user_location=WebSearchUserLocation(city='Mexico City', country='MX'))],
 )
 
 # This needs to be done before the `TemporalAgent` is bound to the workflow.
@@ -2157,9 +2157,6 @@ class WebSearchAgentWorkflow:
         return result.output
 
 
-@pytest.mark.filterwarnings(  # TODO (v2): Remove this once we drop the deprecated events
-    'ignore:`BuiltinToolCallEvent` is deprecated', 'ignore:`BuiltinToolResultEvent` is deprecated'
-)
 async def test_web_search_agent_run_in_workflow(allow_model_requests: None, client: Client):
     async with Worker(
         client,

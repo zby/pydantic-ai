@@ -16,7 +16,7 @@ from inline_snapshot import snapshot
 from pydantic import BaseModel
 
 from pydantic_ai import Agent, ModelRetry
-from pydantic_ai.builtin_tools import WebSearchTool
+from pydantic_ai.server_side_tools import WebSearchTool
 from pydantic_ai.exceptions import UserError
 from pydantic_ai.messages import (
     AudioUrl,
@@ -476,7 +476,7 @@ def test_request_image_url(transformers_multimodal_model: OutlinesModel) -> None
 @skip_if_llama_cpp_imports_unsuccessful
 def test_tool_definition(llamacpp_model: OutlinesModel) -> None:
     # function tools
-    agent = Agent(llamacpp_model, builtin_tools=[WebSearchTool()])
+    agent = Agent(llamacpp_model, server_side_tools=[WebSearchTool()])
     with pytest.raises(UserError, match='Outlines does not support function tools and builtin tools yet.'):
         agent.run_sync('Hello')
 

@@ -197,8 +197,8 @@ class TestModel(Model):
         model_settings: ModelSettings | None,
         model_request_parameters: ModelRequestParameters,
     ) -> ModelResponse:
-        if model_request_parameters.builtin_tools:
-            raise UserError('TestModel does not support built-in tools')
+        if model_request_parameters.server_side_tools:
+            raise UserError('TestModel does not support server-side tools')
 
         tool_calls = self._get_tool_calls(model_request_parameters)
         output_wrapper = self._get_output(model_request_parameters)

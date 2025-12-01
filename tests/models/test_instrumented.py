@@ -15,8 +15,8 @@ from opentelemetry.trace import NoOpTracerProvider
 from pydantic_ai import (
     AudioUrl,
     BinaryContent,
-    BuiltinToolCallPart,
-    BuiltinToolReturnPart,
+    ServerSideToolCallPart,
+    ServerSideToolReturnPart,
     CachePoint,
     DocumentUrl,
     FilePart,
@@ -185,7 +185,7 @@ async def test_instrumented_model(capfire: CaptureLogfire):
                     'server.port': 8000,
                     'model_request_parameters': {
                         'function_tools': [],
-                        'builtin_tools': [],
+                        'server_side_tools': [],
                         'output_mode': 'text',
                         'output_object': None,
                         'output_tools': [],
@@ -425,7 +425,7 @@ async def test_instrumented_model_stream(capfire: CaptureLogfire):
                     'server.port': 8000,
                     'model_request_parameters': {
                         'function_tools': [],
-                        'builtin_tools': [],
+                        'server_side_tools': [],
                         'output_mode': 'text',
                         'output_object': None,
                         'output_tools': [],
@@ -525,7 +525,7 @@ async def test_instrumented_model_stream_break(capfire: CaptureLogfire):
                     'server.port': 8000,
                     'model_request_parameters': {
                         'function_tools': [],
-                        'builtin_tools': [],
+                        'server_side_tools': [],
                         'output_mode': 'text',
                         'output_object': None,
                         'output_tools': [],
@@ -645,7 +645,7 @@ async def test_instrumented_model_attributes_mode(capfire: CaptureLogfire, instr
                         'server.port': 8000,
                         'model_request_parameters': {
                             'function_tools': [],
-                            'builtin_tools': [],
+                            'server_side_tools': [],
                             'output_mode': 'text',
                             'output_object': None,
                             'output_tools': [],
@@ -779,7 +779,7 @@ Fix the errors and try again.\
                         'server.port': 8000,
                         'model_request_parameters': {
                             'function_tools': [],
-                            'builtin_tools': [],
+                            'server_side_tools': [],
                             'output_mode': 'text',
                             'output_object': None,
                             'output_tools': [],
@@ -1494,7 +1494,7 @@ async def test_response_cost_error(capfire: CaptureLogfire, monkeypatch: pytest.
                     'server.port': 8000,
                     'model_request_parameters': {
                         'function_tools': [],
-                        'builtin_tools': [],
+                        'server_side_tools': [],
                         'output_mode': 'text',
                         'output_object': None,
                         'output_tools': [],
@@ -1545,15 +1545,15 @@ def test_message_with_builtin_tool_calls():
         ModelResponse(
             parts=[
                 TextPart('text1'),
-                BuiltinToolCallPart('code_execution', {'code': '2 * 2'}, tool_call_id='tool_call_1'),
-                BuiltinToolReturnPart('code_execution', {'output': '4'}, tool_call_id='tool_call_1'),
+                ServerSideToolCallPart('code_execution', {'code': '2 * 2'}, tool_call_id='tool_call_1'),
+                ServerSideToolReturnPart('code_execution', {'output': '4'}, tool_call_id='tool_call_1'),
                 TextPart('text2'),
-                BuiltinToolCallPart(
+                ServerSideToolCallPart(
                     'web_search',
                     '{"query": "weather: San Francisco, CA", "type": "search"}',
                     tool_call_id='tool_call_2',
                 ),
-                BuiltinToolReturnPart(
+                ServerSideToolReturnPart(
                     'web_search',
                     [
                         {

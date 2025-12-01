@@ -7,7 +7,7 @@ import pytest
 from inline_snapshot import snapshot
 
 from pydantic_ai import (
-    BuiltinToolCallPart,
+    ServerSideToolCallPart,
     PartDeltaEvent,
     PartStartEvent,
     TextPart,
@@ -585,7 +585,7 @@ def test_handle_thinking_delta_no_content_or_signature():
 def test_handle_part():
     manager = ModelResponsePartsManager()
 
-    part = BuiltinToolCallPart(tool_name='tool1', args='{"arg1": ')
+    part = ServerSideToolCallPart(tool_name='tool1', args='{"arg1": ')
 
     event = manager.handle_part(vendor_part_id='builtin', part=part)
     assert event == snapshot(PartStartEvent(index=0, part=part))
@@ -597,17 +597,17 @@ def test_handle_part():
         PartDeltaEvent(index=0, delta=ToolCallPartDelta(args_delta='"value1"}', tool_call_id=part.tool_call_id))
     )
     assert manager.get_parts() == snapshot(
-        [BuiltinToolCallPart(tool_name='tool1', args='{"arg1": "value1"}', tool_call_id=part.tool_call_id)]
+        [ServerSideToolCallPart(tool_name='tool1', args='{"arg1": "value1"}', tool_call_id=part.tool_call_id)]
     )
 
     # Override it with handle_part
-    part2 = BuiltinToolCallPart(tool_name='tool1', args='{"arg2": ')
+    part2 = ServerSideToolCallPart(tool_name='tool1', args='{"arg2": ')
     event = manager.handle_part(vendor_part_id='builtin', part=part2)
     assert event == snapshot(PartStartEvent(index=0, part=part2))
     assert manager.get_parts() == snapshot([part2])
 
     # Finally, demonstrate behavior when no vendor_part_id is provided:
-    part3 = BuiltinToolCallPart(tool_name='tool1', args='{"arg3": ')
+    part3 = ServerSideToolCallPart(tool_name='tool1', args='{"arg3": ')
     event = manager.handle_part(vendor_part_id=None, part=part3)
     assert event == snapshot(PartStartEvent(index=1, part=part3))
     assert manager.get_parts() == snapshot([part2, part3])

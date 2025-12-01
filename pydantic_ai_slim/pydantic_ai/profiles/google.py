@@ -13,8 +13,8 @@ class GoogleModelProfile(ModelProfile):
     ALL FIELDS MUST BE `google_` PREFIXED SO YOU CAN MERGE THEM WITH OTHER MODELS.
     """
 
-    google_supports_native_output_with_builtin_tools: bool = False
-    """Whether the model supports native output with builtin tools.
+    google_supports_native_output_with_server_side_tools: bool = False
+    """Whether the model supports native output with server-side tools.
     See https://ai.google.dev/gemini-api/docs/structured-output?example=recipe#structured_outputs_with_tools"""
 
 
@@ -28,7 +28,7 @@ def google_model_profile(model_name: str) -> ModelProfile | None:
         supports_json_schema_output=is_3_or_newer or not is_image_model,
         supports_json_object_output=is_3_or_newer or not is_image_model,
         supports_tools=not is_image_model,
-        google_supports_native_output_with_builtin_tools=is_3_or_newer,
+        google_supports_native_output_with_server_side_tools=is_3_or_newer,
     )
 
 

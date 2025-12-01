@@ -12,10 +12,10 @@ from dataclasses import dataclass, field
 from typing import Final
 
 from ...messages import (
-    BuiltinToolCallPart,
-    BuiltinToolReturnPart,
     FunctionToolResultEvent,
     RetryPromptPart,
+    ServerSideToolCallPart,
+    ServerSideToolReturnPart,
     TextPart,
     TextPartDelta,
     ThinkingPart,
@@ -64,7 +64,7 @@ __all__ = [
     'RunFinishedEvent',
 ]
 
-BUILTIN_TOOL_CALL_ID_PREFIX: Final[str] = 'pyd_ai_builtin'
+SERVER_SIDE_TOOL_CALL_ID_PREFIX: Final[str] = 'pyd_ai_server_side'
 
 
 @dataclass
@@ -72,7 +72,7 @@ class AGUIEventStream(UIEventStream[RunAgentInput, BaseEvent, AgentDepsT, Output
     """UI event stream transformer for the Agent-User Interaction (AG-UI) protocol."""
 
     _thinking_text: bool = False
-    _builtin_tool_call_ids: dict[str, str] = field(default_factory=dict)
+    _server_side_tool_call_ids: dict[str, str] = field(default_factory=dict)
     _error: bool = False
 
     @property
@@ -159,19 +159,19 @@ class AGUIEventStream(UIEventStream[RunAgentInput, BaseEvent, AgentDepsT, Output
         if not followed_by_thinking:
             yield ThinkingEndEvent(type=EventType.THINKING_END)
 
-    def handle_tool_call_start(self, part: ToolCallPart | BuiltinToolCallPart) -> AsyncIterator[BaseEvent]:
+    def handle_tool_call_start(self, part: ToolCallPart | ServerSideToolCallPart) -> AsyncIterator[BaseEvent]:
         return self._handle_tool_call_start(part)
 
-    def handle_builtin_tool_call_start(self, part: BuiltinToolCallPart) -> AsyncIterator[BaseEvent]:
+    def handle_server_side_tool_call_start(self, part: ServerSideToolCallPart) -> AsyncIterator[BaseEvent]:
         tool_call_id = part.tool_call_id
-        builtin_tool_call_id = '|'.join([BUILTIN_TOOL_CALL_ID_PREFIX, part.provider_name or '', tool_call_id])
-        self._builtin_tool_call_ids[tool_call_id] = builtin_tool_call_id
-        tool_call_id = builtin_tool_call_id
+        server_side_tool_call_id = '|'.join([SERVER_SIDE_TOOL_CALL_ID_PREFIX, part.provider_name or '', tool_call_id])
+        self._server_side_tool_call_ids[tool_call_id] = server_side_tool_call_id
+        tool_call_id = server_side_tool_call_id
 
         return self._handle_tool_call_start(part, tool_call_id)
 
     async def _handle_tool_call_start(
-        self, part: ToolCallPart | BuiltinToolCallPart, tool_call_id: str | None = None
+        self, part: ToolCallPart | ServerSideToolCallPart, tool_call_id: str | None = None
     ) -> AsyncIterator[BaseEvent]:
         tool_call_id = tool_call_id or part.tool_call_id
         parent_message_id = self.message_id
@@ -185,8 +185,8 @@ class AGUIEventStream(UIEventStream[RunAgentInput, BaseEvent, AgentDepsT, Output
     async def handle_tool_call_delta(self, delta: ToolCallPartDelta) -> AsyncIterator[BaseEvent]:
         tool_call_id = delta.tool_call_id
         assert tool_call_id, '`ToolCallPartDelta.tool_call_id` must be set'
-        if tool_call_id in self._builtin_tool_call_ids:
-            tool_call_id = self._builtin_tool_call_ids[tool_call_id]
+        if tool_call_id in self._server_side_tool_call_ids:
+            tool_call_id = self._server_side_tool_call_ids[tool_call_id]
         yield ToolCallArgsEvent(
             tool_call_id=tool_call_id,
             delta=delta.args_delta if isinstance(delta.args_delta, str) else json.dumps(delta.args_delta),
@@ -195,11 +195,11 @@ class AGUIEventStream(UIEventStream[RunAgentInput, BaseEvent, AgentDepsT, Output
     async def handle_tool_call_end(self, part: ToolCallPart) -> AsyncIterator[BaseEvent]:
         yield ToolCallEndEvent(tool_call_id=part.tool_call_id)
 
-    async def handle_builtin_tool_call_end(self, part: BuiltinToolCallPart) -> AsyncIterator[BaseEvent]:
-        yield ToolCallEndEvent(tool_call_id=self._builtin_tool_call_ids[part.tool_call_id])
+    async def handle_server_side_tool_call_end(self, part: ServerSideToolCallPart) -> AsyncIterator[BaseEvent]:
+        yield ToolCallEndEvent(tool_call_id=self._server_side_tool_call_ids[part.tool_call_id])
 
-    async def handle_builtin_tool_return(self, part: BuiltinToolReturnPart) -> AsyncIterator[BaseEvent]:
-        tool_call_id = self._builtin_tool_call_ids[part.tool_call_id]
+    async def handle_server_side_tool_return(self, part: ServerSideToolReturnPart) -> AsyncIterator[BaseEvent]:
+        tool_call_id = self._server_side_tool_call_ids[part.tool_call_id]
         yield ToolCallResultEvent(
             message_id=self.new_message_id(),
             type=EventType.TOOL_CALL_RESULT,
